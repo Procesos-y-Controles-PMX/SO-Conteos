@@ -2,7 +2,8 @@
 
 import type { CountSession } from "@/lib/types";
 import { lineDiff } from "@/lib/types";
-import { cn, formatNumber } from "@/lib/utils";
+import { formatQtyInput } from "@/lib/conteos/qtyMode";
+import { cn } from "@/lib/utils";
 
 export default function DiffReview({
   session,
@@ -48,7 +49,7 @@ export default function DiffReview({
                   )}
                 >
                   {(diff ?? 0) > 0 ? "+" : ""}
-                  {formatNumber(diff ?? 0, 0)} {line.um}
+                  {formatQtyInput(diff ?? 0)} {line.um}
                 </p>
               </li>
             ))}

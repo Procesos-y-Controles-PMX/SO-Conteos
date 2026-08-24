@@ -1,11 +1,24 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Camera, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import QuantityField from "@/components/conteos/QuantityField";
 import SearchCombobox, { type SearchComboboxOption } from "@/components/ui/SearchCombobox";
+import {
+  bagKgFromName,
+  canCountBags,
+  conversionCaption,
+  fromDisplay,
+  pesoStep,
+  readPreferredQtyMode,
+  toDisplay,
+  unitHint,
+  writePreferredQtyMode,
+  type QtyMode,
+} from "@/lib/conteos/qtyMode";
 import type { CountLine, CountSession } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { weekLabel } from "@/lib/week";
 
 function normalize(value: string) {
@@ -39,6 +52,17 @@ export default function SkuStepper({
 }) {
   const line = session.lines[index];
   const total = session.lines.length;
+  const [qtyMode, setQtyMode] = useState<QtyMode>("sacos");
+
+  useEffect(() => {
+    setQtyMode(readPreferredQtyMode());
+  }, []);
+
+  function chooseQtyMode(next: QtyMode) {
+    setQtyMode(next);
+    writePreferredQtyMode(next);
+  }
+
   const searchLines = useCallback(
     (query: string): SearchComboboxOption[] => {
       const q = normalize(query);
@@ -67,11 +91,26 @@ export default function SkuStepper({
   const requireEvidence = session.kind === "urgente";
   const last = index >= total - 1;
   const counted = session.lines.filter((l) => l.fisico != null).length;
+  const bagKg = bagKgFromName(line.nombre);
+  const bags = canCountBags(line.nombre, line.um);
+  const mode: QtyMode = bags ? qtyMode : "peso";
+  const step = bags && bagKg != null ? (mode === "sacos" ? 1 : pesoStep(line.um, bagKg)) : 1;
+
+  function bindQty(stored: number | null, patch: (next: number | null) => void) {
+    return {
+      hint: bags && mode === "sacos" ? "SACOS" : line.um,
+      value: bags && bagKg != null ? toDisplay(stored, line.um, mode, bagKg) : stored,
+      caption: bags && bagKg != null ? conversionCaption(stored, line.um, mode, bagKg) : undefined,
+      step,
+      onChange: (next: number | null) => {
+        patch(bags && bagKg != null ? fromDisplay(next, line.um, mode, bagKg) : next);
+      },
+    };
+  }
 
   function goNext() {
     if (line.fisico == null) {
-      toast.error("Captura el inventario físico de este SKU.");
-      return;
+      onPatch(line.sku, { fisico: 0 });
     }
     if (requireEvidence && !line.evidencia) {
       toast.error("Adjunta foto o video de este producto.");
@@ -121,31 +160,57 @@ export default function SkuStepper({
           {line.sku}
         </p>
 
+        {bags && bagKg != null ? (
+          <div className="mt-5">
+            <p id="captura-unidad-label" className="field-label mb-2">
+              Capturar en
+            </p>
+            <div
+              role="radiogroup"
+              aria-labelledby="captura-unidad-label"
+              className="neu-tray grid grid-cols-2 gap-1 p-1"
+            >
+              {(["sacos", "peso"] as const).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === item}
+                  onClick={() => chooseQtyMode(item)}
+                  className={cn(
+                    "rounded-sm px-3 py-2 text-sm font-semibold",
+                    mode === item ? "neu-nav-active text-white" : "text-fg-muted",
+                  )}
+                >
+                  {item === "sacos" ? "Sacos" : "Peso"}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-center text-[11px] text-fg-faint">{unitHint(line.um, bagKg, mode)}</p>
+          </div>
+        ) : null}
+
         <div className="mt-5">
           <QuantityField
-            key={line.sku}
+            key={`${line.sku}-${mode}`}
             size="lg"
             label="Inventario físico"
-            hint={line.um}
-            value={line.fisico}
             autoFocus
-            onChange={(fisico) => onPatch(line.sku, { fisico })}
             onCommit={goNext}
+            {...bindQty(line.fisico, (fisico) => onPatch(line.sku, { fisico }))}
           />
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <QuantityField
+            key={`${line.sku}-${mode}-pe`}
             label="Pendiente entregar"
-            hint={line.um}
-            value={line.pendienteEntregar}
-            onChange={(pendienteEntregar) => onPatch(line.sku, { pendienteEntregar })}
+            {...bindQty(line.pendienteEntregar, (pendienteEntregar) => onPatch(line.sku, { pendienteEntregar }))}
           />
           <QuantityField
+            key={`${line.sku}-${mode}-pf`}
             label="Pendiente facturar"
-            hint={line.um}
-            value={line.pendienteFacturar}
-            onChange={(pendienteFacturar) => onPatch(line.sku, { pendienteFacturar })}
+            {...bindQty(line.pendienteFacturar, (pendienteFacturar) => onPatch(line.sku, { pendienteFacturar }))}
           />
         </div>
 
