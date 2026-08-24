@@ -18,12 +18,22 @@ export default function NuevoUrgentePage() {
   const [skus, setSkus] = useState<string[]>([]);
 
   useEffect(() => {
-    void Promise.all([listSucursales(), listProductos()]).then(([sucs, prods]) => {
+    void listSucursales().then((sucs) => {
       setSucursales(sucs);
-      setProductos(prods);
-      setSucursalId(sucs[0]?.id ?? "");
+      setSucursalId((prev) => prev || sucs[0]?.id || "");
     });
   }, []);
+
+  useEffect(() => {
+    if (!sucursalId) {
+      setProductos([]);
+      return;
+    }
+    void listProductos(sucursalId).then((prods) => {
+      setProductos(prods);
+      setSkus((prev) => prev.filter((sku) => prods.some((p) => p.sku === sku)));
+    });
+  }, [sucursalId]);
 
   function toggle(sku: string) {
     setSkus((prev) => (prev.includes(sku) ? prev.filter((s) => s !== sku) : [...prev, sku]));

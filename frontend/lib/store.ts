@@ -1,3 +1,4 @@
+import { decodeSpreadsheetBuffer, keepConteoSpreadsheet, parseDelimitedText } from "@/lib/excel/parseInventario";
 import type { CountKind, CountLine, CountSession, InventarioMeta, Producto, SemaforoResumen, Sucursal } from "@/lib/types";
 
 export type InventarioPayload = {
@@ -7,6 +8,8 @@ export type InventarioPayload = {
   skuCount?: number;
   catalogCount?: number;
   sapCount?: number;
+  unmatchedStores?: string[];
+  matchedStores?: number;
   imported?: number;
   skipped?: number;
 };
@@ -29,8 +32,9 @@ export async function listSucursalesConUsuarios(): Promise<Sucursal[]> {
   return data.sucursales;
 }
 
-export async function listProductos(): Promise<Producto[]> {
-  const data = await parse<{ productos: Producto[] }>(await fetch("/api/productos"));
+export async function listProductos(sucursalId?: string): Promise<Producto[]> {
+  const q = sucursalId ? `?sucursalId=${encodeURIComponent(sucursalId)}` : "";
+  const data = await parse<{ productos: Producto[] }>(await fetch(`/api/productos${q}`));
   return data.productos;
 }
 
@@ -39,6 +43,18 @@ export async function getInventario() {
 }
 
 export async function uploadInventario(file: File) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const utf16 = decodeSpreadsheetBuffer(bytes);
+  if (utf16) {
+    const rows = keepConteoSpreadsheet(parseDelimitedText(utf16));
+    return parse<InventarioPayload>(
+      await fetch("/api/inventario", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name.trim(), rows }),
+      }),
+    );
+  }
   const form = new FormData();
   form.append("file", file);
   return parse<InventarioPayload>(await fetch("/api/inventario", { method: "POST", body: form }));

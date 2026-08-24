@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { sucursalId?: string; titulo?: string; skus?: string[] };
     if (!body.sucursalId || !body.skus?.length) return fail("Sucursal y productos requeridos.");
-    const productos = (await fetchProductos(supabase)).filter((p) => body.skus!.includes(p.sku));
+    const productos = (await fetchProductos(supabase, body.sucursalId)).filter((p) => body.skus!.includes(p.sku));
     if (!productos.length) return fail("Ningún SKU válido.");
 
     const sucursal = await fetchSucursalById(supabase, body.sucursalId);

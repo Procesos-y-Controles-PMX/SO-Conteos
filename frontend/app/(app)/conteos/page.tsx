@@ -31,7 +31,7 @@ export default function ConteosHubPage() {
         setWeekly(week);
         setUrgentes(urg);
         setInventario(inv.meta);
-        setSkuCount(inv.skuCount ?? inv.productos?.length ?? week.lines.length);
+        setSkuCount(week.lines.length);
         setError(null);
       })
       .catch((err: Error) => setError(err.message));
@@ -46,7 +46,7 @@ export default function ConteosHubPage() {
       <PageHeader
         eyebrow={user?.zona ? `${user.zona} · ${user.nombre}` : user?.nombre}
         title="Conteos"
-        subtitle={`${weekLabel(weekKeyFromDate())}. Solo polvos (cementos y morteros).`}
+        subtitle={`${weekLabel(weekKeyFromDate())}. Materiales L1–L12 de esta sucursal (incluye líneas sin tag).`}
       />
       {error ? <p className="mb-4 text-sm text-brand">{error}</p> : null}
 
@@ -82,7 +82,7 @@ export default function ConteosHubPage() {
             <SemaforoDot value={sessionSemaforo(weekly ?? undefined)} />
           </div>
           <h2 className="mt-3 font-display text-xl font-semibold text-fg">Conteo semanal</h2>
-          <p className="mt-1 text-sm text-fg-subtle">Todos los SKUs de la base del día. Sin evidencia.</p>
+          <p className="mt-1 text-sm text-fg-subtle">Stock L1–L12 de esta sucursal. Sin evidencia.</p>
           <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted-strong">
             <div
               className="h-full rounded-full bg-steel transition-all"

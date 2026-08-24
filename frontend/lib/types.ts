@@ -39,6 +39,9 @@ export type Producto = {
   um: string;
   teorico: number;
   costo: number;
+  sucursalId?: string;
+  sucursalNombre?: string;
+  linea?: string;
 };
 
 export type CountLine = {

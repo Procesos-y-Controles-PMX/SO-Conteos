@@ -1,73 +1,75 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CountKind, CountLine, CountSession, Producto } from "@/lib/types";
-import { isPolvoProducto } from "@/lib/catalog/polvos";
+import type { InventarioRow } from "@/lib/excel/parseInventario";
 import { mapInventarioMeta, mapLine, mapProducto, mapSession, type CntConteoRow, type CntLineaRow } from "@/lib/db/map";
 import { fetchSucursalById, fetchSucursales } from "@/lib/db/stores";
 
 export { fetchSucursalById, fetchSucursales };
 
-export async function fetchSapStock(supabase: SupabaseClient): Promise<Producto[]> {
-  const { data, error } = await supabase.from("cnt_inventario_sku").select("*").order("sku");
-  if (error) throw error;
-  return (data ?? []).map(mapProducto);
+type StockRow = {
+  sku: string;
+  nombre: string;
+  um: string;
+  teorico: number | string;
+  costo: number | string;
+  id_sucursal: string;
+  linea: string | null;
+};
+
+const INVENTARIO_KEY = "inventario_por_sucursal";
+
+async function fetchInventarioAjustes(supabase: SupabaseClient): Promise<StockRow[] | null> {
+  const { data, error } = await supabase.from("cnt_ajustes").select("valor").eq("clave", INVENTARIO_KEY).maybeSingle();
+  if (error || data?.valor == null) return null;
+  return Array.isArray(data.valor) ? (data.valor as StockRow[]) : null;
 }
 
-async function fetchCtzCatalog(supabase: SupabaseClient): Promise<Producto[]> {
+function mapStockRows(rows: StockRow[], nameById: Map<string, string>): Producto[] {
+  return rows.map((row) =>
+    mapProducto({
+      ...row,
+      sucursal_nombre: nameById.get(row.id_sucursal),
+    }),
+  );
+}
+
+export async function fetchSapStock(supabase: SupabaseClient, sucursalId?: string): Promise<Producto[]> {
+  const fromAjustes = await fetchInventarioAjustes(supabase);
+  const sucursales = sucursalId ? [] : await fetchSucursales(supabase);
+  const nameById = new Map(sucursales.map((s) => [s.id, s.nombre]));
+
+  if (fromAjustes?.length) {
+    const rows = sucursalId ? fromAjustes.filter((r) => r.id_sucursal === sucursalId) : fromAjustes;
+    return mapStockRows(rows, nameById);
+  }
+
   const page = 1000;
-  const rows: Producto[] = [];
+  const rows: StockRow[] = [];
   for (let from = 0; ; from += page) {
-    const { data, error } = await supabase
-      .from("ctz_productos")
-      .select("sku, descripcion, unidad_medida, precio_unitario_base, activo")
-      .eq("activo", true)
-      .not("sku", "is", null)
-      .order("sku")
-      .range(from, from + page - 1);
-    if (error) throw error;
-    const batch = (data ?? []) as Array<{
-      sku: string | null;
-      descripcion: string;
-      unidad_medida: string | null;
-      precio_unitario_base: number | string;
-    }>;
-    for (const row of batch) {
-      const sku = String(row.sku ?? "").trim();
-      if (!sku) continue;
-      if (!isPolvoProducto(row.descripcion)) continue;
-      rows.push(
-        mapProducto({
-          sku,
-          nombre: row.descripcion,
-          um: row.unidad_medida?.trim() || "PZA",
-          teorico: 0,
-          costo: row.precio_unitario_base,
-        }),
-      );
+    let q = supabase.from("cnt_inventario_sku").select("*").order("sku");
+    if (sucursalId) q = q.eq("id_sucursal", sucursalId);
+    const { data, error } = await q.range(from, from + page - 1);
+    if (error) {
+      if (error.message.includes("id_sucursal")) return [];
+      throw error;
     }
+    const batch = (data ?? []) as StockRow[];
+    rows.push(...batch);
     if (batch.length < page) break;
   }
-  return rows;
+  return mapStockRows(rows, nameById);
 }
 
-/** Cotizador polvos (cementos/morteros) + SAP teórico overlay when the SKU is in that set. */
-export async function fetchProductos(supabase: SupabaseClient): Promise<Producto[]> {
-  const [catalog, sap] = await Promise.all([fetchCtzCatalog(supabase), fetchSapStock(supabase)]);
-  const bySku = new Map<string, Producto>();
-  for (const p of catalog) bySku.set(p.sku.toUpperCase(), p);
-  for (const p of sap) {
-    const key = p.sku.toUpperCase();
-    const existing = bySku.get(key);
-    if (!existing) continue;
-    bySku.set(key, {
-      ...existing,
-      teorico: p.teorico,
-      costo: p.costo || existing.costo,
-      um: p.um || existing.um,
-    });
+/** Assortment for weekly/urgent counts: L1–L12 (+ blank) stock for this store. */
+export async function fetchProductos(supabase: SupabaseClient, sucursalId?: string): Promise<Producto[]> {
+  const rows = await fetchSapStock(supabase, sucursalId);
+  if (sucursalId) return rows.sort((a, b) => a.sku.localeCompare(b.sku, "es"));
+  const unique = new Map<string, Producto>();
+  for (const row of rows) {
+    const key = row.sku.toUpperCase();
+    if (!unique.has(key)) unique.set(key, { ...row, sucursalId: undefined, sucursalNombre: undefined, teorico: 0 });
   }
-  return Array.from(bySku.values())
-    .filter((p) => isPolvoProducto(p.nombre))
-    .sort((a, b) => a.sku.localeCompare(b.sku, "es"));
+  return Array.from(unique.values()).sort((a, b) => a.sku.localeCompare(b.sku, "es"));
 }
 
 async function insertSessionLines(supabase: SupabaseClient, conteoId: string, productos: Producto[]) {
@@ -118,19 +120,31 @@ async function deleteLinesBySku(supabase: SupabaseClient, conteoId: string, skus
   }
 }
 
-async function syncWeeklyLines(supabase: SupabaseClient, conteoId: string, lines: CountLine[]): Promise<CountLine[]> {
-  const productos = await fetchProductos(supabase);
+async function syncWeeklyLines(supabase: SupabaseClient, conteoId: string, sucursalId: string, lines: CountLine[]): Promise<CountLine[]> {
+  const productos = await fetchProductos(supabase, sucursalId);
   const allowed = new Set(productos.map((p) => p.sku.toUpperCase()));
-  const extra = lines.filter((line) => !allowed.has(line.sku.toUpperCase())).map((line) => line.sku);
+  const extra = lines.filter((line) => !allowed.has(line.sku.toUpperCase()) && line.fisico == null).map((line) => line.sku);
   if (extra.length) await deleteLinesBySku(supabase, conteoId, extra);
   const kept = new Set(
     lines.filter((line) => allowed.has(line.sku.toUpperCase())).map((line) => line.sku.toUpperCase()),
   );
   const missing = productos.filter((p) => !kept.has(p.sku.toUpperCase()));
   if (missing.length) await insertSessionLines(supabase, conteoId, missing);
-  return (extra.length || missing.length ? await linesFor(supabase, conteoId) : lines).filter((line) =>
-    allowed.has(line.sku.toUpperCase()),
-  );
+  const teoricoBySku = new Map(productos.map((p) => [p.sku.toUpperCase(), p]));
+  let teoricoChanged = false;
+  for (const line of lines) {
+    if (line.fisico != null) continue;
+    const sap = teoricoBySku.get(line.sku.toUpperCase());
+    if (!sap || Number(sap.teorico) === Number(line.teorico)) continue;
+    const { error } = await supabase
+      .from("cnt_conteo_lineas")
+      .update({ teorico: sap.teorico, nombre: sap.nombre, um: sap.um })
+      .eq("id_conteo", conteoId)
+      .eq("sku", line.sku);
+    if (error) throw error;
+    teoricoChanged = true;
+  }
+  return extra.length || missing.length || teoricoChanged ? await linesFor(supabase, conteoId) : lines;
 }
 
 async function linesFor(supabase: SupabaseClient, conteoId: string): Promise<CountLine[]> {
@@ -153,12 +167,8 @@ export async function fetchSession(
   if (!data) return null;
   const row = data as CntConteoRow;
   let lines = await linesFor(supabase, id);
-  if (row.kind === "semanal" && row.status !== "enviado") {
-    if (options.syncCatalog) {
-      lines = await syncWeeklyLines(supabase, id, lines);
-    } else {
-      lines = lines.filter((line) => isPolvoProducto(line.nombre));
-    }
+  if (row.kind === "semanal" && row.status !== "enviado" && options.syncCatalog) {
+    lines = await syncWeeklyLines(supabase, id, row.id_sucursal, lines);
   }
   return mapSession(row, lines);
 }
@@ -189,9 +199,6 @@ export async function fetchSessions(
       continue;
     }
     let lines = await linesFor(supabase, row.id);
-    if (row.kind === "semanal") {
-      lines = lines.filter((line) => isPolvoProducto(line.nombre));
-    }
     result.push(mapSession(row, lines));
   }
   return result;
@@ -245,21 +252,32 @@ export async function deleteConteo(supabase: SupabaseClient, id: string) {
 
 export async function replaceInventario(
   supabase: SupabaseClient,
-  productos: Producto[],
+  productos: InventarioRow[],
   fileName: string,
 ) {
-  if (productos.length) {
-    const { error } = await supabase.from("cnt_inventario_sku").upsert(
-      productos.map((p) => ({
-        sku: p.sku,
-        nombre: p.nombre,
-        um: p.um,
-        teorico: p.teorico,
-        costo: p.costo,
-        updated_at: new Date().toISOString(),
-      })),
-      { onConflict: "sku" },
+  const payload = productos.map((p) => ({
+    id_sucursal: p.sucursalId,
+    sku: p.sku,
+    nombre: p.nombre,
+    um: p.um,
+    teorico: p.teorico,
+    costo: p.costo,
+    linea: p.linea || null,
+  }));
+  const { error: ajusteError } = await supabase.from("cnt_ajustes").upsert({
+    clave: INVENTARIO_KEY,
+    valor: payload,
+  });
+  if (ajusteError) throw ajusteError;
+
+  const now = new Date().toISOString();
+  await supabase.from("cnt_inventario_sku").delete().neq("sku", "");
+  const chunk = 400;
+  for (let i = 0; i < payload.length; i += chunk) {
+    const { error } = await supabase.from("cnt_inventario_sku").insert(
+      payload.slice(i, i + chunk).map((p) => ({ ...p, updated_at: now })),
     );
+    if (error && (error.message.includes("id_sucursal") || error.code === "PGRST204")) break;
     if (error) throw error;
   }
   const { error: cargaError } = await supabase.from("cnt_inventario_carga").insert({ file_name: fileName });

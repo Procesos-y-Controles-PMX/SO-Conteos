@@ -77,6 +77,9 @@ export function mapProducto(row: {
   um: string;
   teorico: number | string;
   costo: number | string;
+  id_sucursal?: string;
+  sucursal_nombre?: string;
+  linea?: string | null;
 }): import("@/lib/types").Producto {
   return {
     sku: row.sku,
@@ -84,6 +87,9 @@ export function mapProducto(row: {
     um: row.um,
     teorico: Number(row.teorico) || 0,
     costo: Number(row.costo) || 0,
+    sucursalId: row.id_sucursal,
+    sucursalNombre: row.sucursal_nombre,
+    linea: row.linea ?? undefined,
   };
 }
 

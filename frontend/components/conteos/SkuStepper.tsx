@@ -58,7 +58,7 @@ export default function SkuStepper({
         <p className="field-label">Sin SKUs</p>
         <h2 className="mt-1 font-display text-xl font-semibold text-fg">No hay productos para contar</h2>
         <p className="mt-2 text-sm text-fg-subtle">
-          No hay cementos ni morteros en el catálogo para armar este conteo.
+          No hay materiales L1–L12 (ni líneas en blanco) de SAP para esta sucursal.
         </p>
       </div>
     );

@@ -10,7 +10,7 @@ npm install
 npm run dev                  # http://localhost:3004
 ```
 
-Copia `frontend/.env.example` a `frontend/.env.local`. Usa el mismo proyecto de Supabase que Cotizador (`ctz_sucursales` / `ctz_usuarios`). En Supabase corre `db/schema.sql` una vez.
+Copia `frontend/.env.example` a `frontend/.env.local`. Usa el mismo proyecto de Supabase que Cotizador (`ctz_sucursales` / `ctz_usuarios`). En Supabase corre `db/schema.sql` una vez. Si `cnt_inventario_sku` ya existía con PK solo por SKU, corre también `db/patch-inventario-por-sucursal.sql`.
 
 ### Acceso
 
@@ -24,9 +24,9 @@ Copia `frontend/.env.example` a `frontend/.env.local`. Usa el mismo proyecto de 
 
 - Sucursales: `ctz_sucursales`
 - Cuentas: `ctz_usuarios`, mapeadas con `tiendas.correo` (sucursal = gerente)
-- Inventario teórico: Excel/CSV del día → `cnt_inventario_sku`
+- Inventario teórico: archivo nacional SAP (L1–L12 + líneas en blanco) → `cnt_inventario_sku` por sucursal
 - Conteos: `cnt_conteos` / `cnt_conteo_lineas`
-- Semanales: catálogo de polvos (cementos y morteros) de Cotizador
+- Semanales: el surtido y el teórico de esa sucursal en el archivo SAP
 
 ## Stack
 

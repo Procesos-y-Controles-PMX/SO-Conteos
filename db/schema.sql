@@ -18,13 +18,18 @@ create table if not exists cnt_ajustes (
 );
 
 create table if not exists cnt_inventario_sku (
-  sku text primary key,
+  id_sucursal uuid not null references ctz_sucursales (id) on delete cascade,
+  sku text not null,
   nombre text not null,
   um text not null,
   teorico numeric not null default 0,
   costo numeric not null default 0,
-  updated_at timestamptz not null default now()
+  linea text,
+  updated_at timestamptz not null default now(),
+  primary key (id_sucursal, sku)
 );
+
+create index if not exists cnt_inventario_sku_sucursal_idx on cnt_inventario_sku (id_sucursal);
 
 create table if not exists cnt_inventario_carga (
   id uuid primary key default gen_random_uuid(),
