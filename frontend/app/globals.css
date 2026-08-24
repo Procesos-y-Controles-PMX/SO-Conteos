@@ -1,0 +1,565 @@
+@import "tailwindcss";
+@source "../node_modules/@promexma/ui/src";
+
+/* Class-based dark mode driven by next-themes (`attribute="class"`). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --background: #e8ecf3;
+  --foreground: #171717;
+  --brand: #ED1C24;
+  --brand-hover: #c9171e;
+  --brand-active: #a81419;
+  --surface: #e8ecf3;
+  --steel: #34507A;
+  --steel-tint: rgba(52, 80, 122, 0.12);
+  --brand-tint: rgba(237, 28, 36, 0.09);
+  --status-crit: #DC2626;
+  --focus-ring-color: var(--steel);
+
+  /*
+   * Neumorphic base. Surfaces share one color with the canvas; depth comes
+   * only from the paired light/dark shadows below.
+   */
+  --neu-bg: #e8ecf3;
+  --neu-light: #ffffff;
+  --neu-dark: #bcc6d4;
+
+  /* Dark clay, shared by dark mode so it can't drift from Carta Porte. */
+  --clay-dark-bg: #1b2027;
+  --clay-dark-light: #242b34;
+  --clay-dark-shade: #0e1116;
+
+  --grid-line: rgba(150, 165, 187, 0.58);
+  --grid-emboss: #ffffff;
+  --grid-shade: rgba(172, 184, 202, 0.6);
+
+  --neu-raised: -5px -5px 15px var(--neu-light), 5px 5px 15px var(--neu-dark);
+  --neu-raised-sm: -3px -3px 8px var(--neu-light), 3px 3px 8px var(--neu-dark);
+  --neu-raised-lg: -8px -8px 22px var(--neu-light), 8px 8px 22px var(--neu-dark);
+  --neu-pressed: inset -4px -4px 10px var(--neu-light), inset 4px 4px 10px var(--neu-dark);
+  --neu-pressed-sm: inset -2px -2px 6px var(--neu-light), inset 2px 2px 6px var(--neu-dark);
+  --shadow-card: var(--neu-raised);
+
+  --console-bg: var(--neu-bg);
+  --fg: #0f172a;
+  --fg-strong: #334155;
+  --fg-muted: #475569;
+  --fg-subtle: #5b6b80;
+  --fg-faint: #8493a8;
+  --card: var(--neu-bg);
+  --muted: var(--neu-bg);
+  --muted-strong: #dde3ec;
+  --line: rgba(148, 163, 184, 0.22);
+  --line-subtle: rgba(148, 163, 184, 0.14);
+  --line-strong: rgba(148, 163, 184, 0.34);
+  --canvas: var(--neu-bg);
+
+  --motion-instant: 90ms;
+  --motion-quick: 180ms;
+  --motion-settle: 280ms;
+  --motion-ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #1b2027;
+  --foreground: #e6edf3;
+  --surface: #1b2027;
+  --steel-tint: rgba(120, 150, 200, 0.16);
+  --brand-tint: rgba(237, 28, 36, 0.14);
+  --focus-ring-color: #5b7fc0;
+
+  --neu-bg: var(--clay-dark-bg);
+  --neu-light: var(--clay-dark-light);
+  --neu-dark: var(--clay-dark-shade);
+  --neu-raised: -5px -5px 15px var(--neu-light), 5px 5px 15px var(--neu-dark);
+  --neu-raised-sm: -3px -3px 8px var(--neu-light), 3px 3px 8px var(--neu-dark);
+  --neu-raised-lg: -8px -8px 22px var(--neu-light), 8px 8px 22px var(--neu-dark);
+  --neu-pressed: inset -4px -4px 10px var(--neu-light), inset 4px 4px 10px var(--neu-dark);
+  --neu-pressed-sm: inset -2px -2px 6px var(--neu-light), inset 2px 2px 6px var(--neu-dark);
+  --shadow-card: var(--neu-raised);
+
+  --fg: #e6edf3;
+  --fg-strong: #c9d1d9;
+  --fg-muted: #9da7b2;
+  --fg-subtle: #8b95a1;
+  --fg-faint: #6e7681;
+  --card: var(--neu-bg);
+  --muted: var(--neu-bg);
+  --muted-strong: #151a20;
+  --line: rgba(255, 255, 255, 0.06);
+  --line-subtle: rgba(255, 255, 255, 0.04);
+  --line-strong: rgba(255, 255, 255, 0.1);
+  --canvas: var(--neu-bg);
+  --console-bg: var(--neu-bg);
+  --grid-line: rgba(0, 0, 0, 0.5);
+  --grid-emboss: rgba(255, 255, 255, 0.085);
+  --grid-shade: rgba(0, 0, 0, 0.4);
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-active: var(--brand-active);
+  --color-brand-tint: var(--brand-tint);
+  --color-steel: var(--steel);
+  --color-fg: var(--fg);
+  --color-fg-strong: var(--fg-strong);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-fg-faint: var(--fg-faint);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-strong: var(--muted-strong);
+  --color-line: var(--line);
+  --color-line-subtle: var(--line-subtle);
+  --color-line-strong: var(--line-strong);
+  --color-canvas: var(--canvas);
+
+  --font-display: var(--font-saira);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+
+  --radius-sm: 12px;
+  --radius-md: 14px;
+  --radius-lg: 16px;
+  --radius-xl: 18px;
+  --radius-2xl: 22px;
+  --radius-3xl: 28px;
+}
+
+html,
+body {
+  background-color: var(--background);
+  overscroll-behavior: none;
+}
+
+body {
+  @apply antialiased;
+  color: var(--fg);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+.app-canvas {
+  background-color: var(--canvas);
+}
+
+.app-canvas-dots {
+  background-image: radial-gradient(circle, rgba(148, 163, 184, 0.32) 0.8px, transparent 0.8px);
+  background-size: 20px 20px;
+}
+
+/*
+ * Background lattice as raised tiles. Filter lives on `canvas`, not the
+ * wrapper — WebKit skips ancestor `filter` on replaced layers (canvas).
+ */
+.app-grid-tile canvas {
+  filter: drop-shadow(-1px -1px 0px var(--grid-shade))
+    drop-shadow(2px 2px 0px var(--grid-emboss));
+}
+
+/* ============================================================
+   Neumorphic primitives. Depth is shadow-only: every surface keeps
+   the canvas color, so borders stay near-invisible by design.
+   ============================================================ */
+
+.neu-raised,
+.neu-raised-sm,
+.neu-raised-lg,
+.neu-pressed,
+.neu-pressed-sm,
+.neu-flat,
+.neu-button,
+.neu-tray,
+.neu-popover,
+.neu-nav-active,
+.card-panel,
+.input-field,
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+  border: 0;
+}
+
+.neu-raised {
+  background: var(--neu-bg);
+  box-shadow: var(--neu-raised);
+}
+
+.neu-raised-sm {
+  background: var(--neu-bg);
+  box-shadow: var(--neu-raised-sm);
+}
+
+.neu-raised-lg {
+  background: var(--neu-bg);
+  box-shadow: var(--neu-raised-lg);
+}
+
+.neu-pressed {
+  background: var(--neu-bg);
+  box-shadow: var(--neu-pressed);
+}
+
+.neu-pressed-sm {
+  background: var(--neu-bg);
+  box-shadow: var(--neu-pressed-sm);
+}
+
+.neu-flat {
+  background: var(--neu-bg);
+  box-shadow: none;
+}
+
+.neu-button {
+  background: var(--neu-bg);
+  box-shadow: var(--neu-raised-sm);
+  transition:
+    box-shadow var(--motion-quick) var(--motion-ease),
+    color var(--motion-quick) var(--motion-ease);
+}
+
+.neu-button:hover:not(:disabled) {
+  box-shadow: var(--neu-raised);
+}
+
+.neu-button:active:not(:disabled),
+.neu-button[data-pressed="true"] {
+  box-shadow: var(--neu-pressed-sm);
+}
+
+.neu-nav-active {
+  background: linear-gradient(145deg, var(--brand), var(--brand-active));
+  box-shadow: var(--neu-raised-sm);
+}
+
+.neu-nav-idle {
+  background: var(--neu-bg);
+  box-shadow: none;
+}
+
+.neu-nav-idle:hover {
+  box-shadow: var(--neu-raised-sm);
+}
+
+.neu-popover {
+  border-radius: var(--radius-md);
+  background: var(--neu-bg);
+  box-shadow: var(--neu-raised-lg);
+}
+
+.neu-option {
+  transition: box-shadow var(--motion-instant, 90ms) var(--motion-ease, ease);
+}
+
+.neu-option:hover {
+  box-shadow: var(--neu-pressed-sm);
+}
+
+.neu-tray {
+  border-radius: var(--radius-md);
+  background: var(--neu-bg);
+  box-shadow: var(--neu-pressed-sm);
+}
+
+.neu-sidebar,
+.neu-bottom-nav {
+  --neu-bg: var(--clay-dark-bg);
+  --neu-light: var(--clay-dark-light);
+  --neu-dark: var(--clay-dark-shade);
+  --neu-raised: -5px -5px 15px var(--neu-light), 5px 5px 15px var(--neu-dark);
+  --neu-raised-sm: -3px -3px 8px var(--neu-light), 3px 3px 8px var(--neu-dark);
+  --neu-raised-lg: -8px -8px 22px var(--neu-light), 8px 8px 22px var(--neu-dark);
+  --neu-pressed: inset -4px -4px 10px var(--neu-light), inset 4px 4px 10px var(--neu-dark);
+  --neu-pressed-sm: inset -2px -2px 6px var(--neu-light), inset 2px 2px 6px var(--neu-dark);
+
+  --fg: #e6edf3;
+  --fg-strong: #c9d1d9;
+  --fg-muted: #9da7b2;
+  --fg-subtle: #8b95a1;
+  --fg-faint: #6e7681;
+
+  background: var(--neu-bg);
+  color: var(--fg);
+}
+
+.neu-sidebar {
+  color-scheme: dark;
+  box-shadow:
+    0 -2px 0 var(--neu-bg),
+    -2px 0 0 var(--neu-bg),
+    inset -1px 0 0 rgba(255, 255, 255, 0.06),
+    12px 0 32px -14px rgba(14, 17, 22, 0.5);
+}
+
+.neu-bottom-nav {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 -12px 32px -14px rgba(14, 17, 22, 0.5);
+}
+
+.card-panel {
+  @apply rounded-lg;
+  background: var(--neu-bg);
+  box-shadow: var(--neu-raised);
+}
+
+.field-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+.btn-primary {
+  @apply inline-flex min-h-10 items-center justify-center rounded-sm px-5 py-2.5 text-sm font-semibold text-white transition-all;
+  background: linear-gradient(145deg, var(--brand), var(--brand-active));
+  box-shadow: var(--neu-raised);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(145deg, var(--brand-hover), var(--brand-active));
+  box-shadow: var(--neu-raised-lg);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--brand-active);
+  box-shadow: var(--neu-pressed);
+}
+
+.btn-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  box-shadow: var(--neu-raised-sm);
+}
+
+.btn-secondary,
+.btn-danger {
+  @apply inline-flex min-h-10 items-center justify-center rounded-sm px-5 py-2.5 text-sm font-semibold;
+  background: var(--neu-bg);
+  box-shadow: var(--neu-raised-sm);
+  transition:
+    box-shadow var(--motion-quick) var(--motion-ease),
+    color var(--motion-quick) var(--motion-ease);
+}
+
+.btn-secondary {
+  color: var(--fg-strong);
+}
+
+.btn-danger {
+  color: var(--brand);
+}
+
+.btn-secondary:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) {
+  box-shadow: var(--neu-raised);
+}
+
+.btn-secondary:active:not(:disabled),
+.btn-danger:active:not(:disabled) {
+  box-shadow: var(--neu-pressed-sm);
+}
+
+.input-field {
+  @apply w-full rounded-sm px-4 py-2.5 text-sm text-fg outline-none;
+  background: var(--neu-bg);
+  box-shadow: var(--neu-pressed-sm);
+  transition: box-shadow var(--motion-quick) var(--motion-ease);
+}
+
+.input-field::placeholder {
+  color: var(--fg-faint);
+}
+
+.input-field:hover:not(:disabled):not(:focus) {
+  box-shadow: var(--neu-pressed);
+}
+
+.input-field:focus {
+  box-shadow:
+    var(--neu-pressed),
+    0 0 0 2px color-mix(in srgb, var(--steel) 45%, transparent);
+}
+
+.input-field:disabled {
+  color: var(--fg-subtle);
+  box-shadow: var(--neu-raised-sm);
+}
+
+@keyframes rail-glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.animate-rail-glow {
+  animation: rail-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes module-enter-up {
+  from { opacity: 0; transform: translate3d(0, 22px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes module-enter-down {
+  from { opacity: 0; transform: translate3d(0, -22px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes module-enter-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.module-enter-up { animation: module-enter-up 0.28s cubic-bezier(0.32, 0.72, 0, 1) both; }
+.module-enter-down { animation: module-enter-down 0.28s cubic-bezier(0.32, 0.72, 0, 1) both; }
+.module-enter-fade { animation: module-enter-fade 0.22s ease-out both; }
+
+@keyframes fade-up {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+.login-safe-x {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+.login-safe-top {
+  padding-top: max(1rem, calc(env(safe-area-inset-top, 0px) + 0.75rem));
+}
+
+.login-safe-bottom {
+  padding-bottom: max(1.5rem, calc(env(safe-area-inset-bottom, 0px) + 5.25rem));
+}
+
+@media (min-width: 1024px) {
+  .login-safe-top,
+  .login-safe-bottom {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+.app-safe-x {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+@media (min-width: 768px) {
+  .app-safe-x {
+    padding-left: max(2rem, env(safe-area-inset-left));
+    padding-right: max(2rem, env(safe-area-inset-right));
+  }
+}
+
+.app-safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.sidebar-scroll:hover {
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.55);
+}
+
+.app-main-pad {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 1024px) {
+  .app-main-pad {
+    padding-bottom: 1.5rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger {
+    min-height: 44px;
+  }
+
+  .input-field {
+    min-height: 48px;
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rail-glow { animation: none; }
+
+  .module-enter-up,
+  .module-enter-down,
+  .module-enter-fade { animation: module-enter-fade 0.15s ease-out both; }
+
+  .animate-fade-up { animation: none; }
+}
+
+:where(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   Add to globals.css in EACH app:
+     SO-Portal/app/globals.css
+     SO-Equipo-Movil/mini-os/src/app/globals.css
+     SO-Cotizador/frontend/app/globals.css
+     SO-Permisos/frontend/app/globals.css
+     SO-Carta-Responsiva/frontend/app/globals.css
+
+   SO-UI ships no stylesheet, so the keyframes its components reference have
+   to live in the consuming app (this is already how rail-glow and
+   module-enter-* work). @source already covers the package's utilities.
+   ============================================================ */
+
+@keyframes so-skeleton-sweep {
+  0%        { transform: translateX(-120%) }
+  60%, 100% { transform: translateX(220%) }
+}
+
+@keyframes so-refresh-spin {
+  to { transform: rotate(360deg) }
+}
+
+@keyframes so-updated-flash {
+  0%   { background-color: rgba(52, 80, 122, 0) }
+  18%  { background-color: var(--steel-tint) }
+  100% { background-color: rgba(52, 80, 122, 0) }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*="so-skeleton-sweep"] { animation: none }
+}

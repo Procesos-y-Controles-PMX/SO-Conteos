@@ -1,0 +1,35 @@
+{
+  "name": "so-conteos",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3004",
+    "build": "next build",
+    "start": "next start -p 3004",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@promexma/ui": "github:Procesos-y-Controles-PMX/SO-UI#main",
+    "@supabase/supabase-js": "^2.112.3",
+    "@tailwindcss/postcss": "^4.2.4",
+    "clsx": "^2.1.1",
+    "jose": "^6.2.10",
+    "lucide-react": "^1.14.0",
+    "motion": "^12.42.2",
+    "next": "^16.2.4",
+    "next-themes": "^0.4.6",
+    "postcss": "^8.5.14",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "read-excel-file": "^9.3.10",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^6.0.3"
+  }
+}
