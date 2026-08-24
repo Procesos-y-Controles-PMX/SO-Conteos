@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { dbOrError, fail, ok } from "@/lib/api/http";
 import { mapCtzUser, type CtzUsuarioRow } from "@/lib/db/map";
@@ -30,24 +29,30 @@ export async function POST(request: Request) {
       return fail("Token de otra aplicación.", 401);
     }
 
-    const raw = (payload.session as { user?: CtzUsuarioRow } | undefined)?.user;
+    const session = payload.session as {
+      user?: CtzUsuarioRow;
+      sucursal?: { id?: string; nombre?: string; zona?: string };
+    } | undefined;
+    const raw = session?.user;
     if (!raw?.id || !raw.email) return fail("Token inválido.", 401);
 
     if (raw.rol === "admin") {
       return ok({ user: mapCtzUser(raw) });
     }
 
-    const sucursal = await fetchSucursalByGerenteEmail(supabase, raw.email);
-    if (!sucursal) {
+    const picked = session?.sucursal?.id
+      ? { id: session.sucursal.id, nombre: session.sucursal.nombre ?? "", zona: session.sucursal.zona ?? "" }
+      : await fetchSucursalByGerenteEmail(supabase, raw.email);
+    if (!picked?.id) {
       return fail("Esta cuenta no está ligada a una sucursal de conteos.", 401);
     }
 
     return ok({
       user: mapCtzUser(raw, {
         rol: "tienda",
-        nombre: sucursal.nombre,
-        sucursalId: sucursal.id,
-        zona: sucursal.zona,
+        nombre: picked.nombre || raw.nombre_completo || raw.email,
+        sucursalId: picked.id,
+        zona: picked.zona,
       }),
     });
   } catch {
