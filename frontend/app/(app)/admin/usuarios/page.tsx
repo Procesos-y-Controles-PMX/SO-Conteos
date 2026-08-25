@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
 import SelectDropdown from "@/components/ui/SelectDropdown";
 import UsuarioFormModal from "@/components/usuarios/UsuarioFormModal";
-import { isMajorAdmin, isMajorAdminEmail } from "@/lib/access";
+import { isConteosAdmin, isMajorAdmin, isMajorAdminEmail } from "@/lib/access";
 import { useAuth } from "@/lib/auth";
 import { SO_ACCOUNT_APP_LABELS, SO_ACCOUNT_APPS, type SoAccount, type SoAccountApp } from "@/lib/so-account-types";
 import { deleteUsuario, listAdminUsuarios, listSoAccounts, updateUsuario } from "@/lib/store";
@@ -135,7 +136,8 @@ function SortHead({
 }
 
 export default function UsuariosPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const router = useRouter();
   const showCreated = isMajorAdmin(user);
   const [usuarios, setUsuarios] = useState<CtzUsuario[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
@@ -149,6 +151,10 @@ export default function UsuariosPage() {
   const [deleteTarget, setDeleteTarget] = useState<CtzUsuario | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  useEffect(() => {
+    if (!loading && !isConteosAdmin(user?.rol)) router.replace("/admin");
+  }, [loading, user, router]);
+
   async function reload() {
     const data = await listAdminUsuarios();
     setUsuarios(data.usuarios ?? []);
@@ -156,8 +162,9 @@ export default function UsuariosPage() {
   }
 
   useEffect(() => {
+    if (!isConteosAdmin(user?.rol)) return;
     void reload().catch((err: Error) => toast.error(err.message));
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (!showCreated || !user?.email) return;
@@ -252,6 +259,8 @@ export default function UsuariosPage() {
       setDeleting(false);
     }
   }
+
+  if (loading || !isConteosAdmin(user?.rol)) return null;
 
   return (
     <div className="space-y-8">

@@ -40,7 +40,7 @@ const NAV: NavItem[] = [
   { label: "Nuevo urgente", href: "/admin/urgentes/nuevo", icon: <Bell className="h-[18px] w-[18px]" />, roles: ["admin", "administrador_general"] },
   { label: "Descargas", href: "/admin/descargas", icon: <Download className="h-[18px] w-[18px]" />, roles: ["admin", "administrador_general"] },
   { label: "Usuarios", href: "/admin/usuarios", icon: <Users className="h-[18px] w-[18px]" />, roles: ["admin", "administrador_general"] },
-  { label: "Accesos", href: "/admin/accesos", icon: <Shield className="h-[18px] w-[18px]" />, roles: ["admin", "administrador_general"] },
+  { label: "Accesos", href: "/admin/accesos", icon: <Shield className="h-[18px] w-[18px]" />, roles: ["administrador_general"] },
 ];
 
 export default function AppShell({ children }: { children: ReactNode }) {
