@@ -1,5 +1,5 @@
 import { decodeSpreadsheetBuffer, keepConteoSpreadsheet, parseDelimitedText } from "@/lib/excel/parseInventario";
-import type { CountKind, CountLine, CountSession, InventarioMeta, Producto, SemaforoResumen, Sucursal, ZonaSemaforo } from "@/lib/types";
+import type { CountKind, CountLine, CountSession, CtzUsuario, InventarioMeta, Producto, SemaforoResumen, Sucursal, ZonaSemaforo } from "@/lib/types";
 
 export type InventarioPayload = {
   meta: InventarioMeta;
@@ -30,6 +30,48 @@ export async function listSucursales(): Promise<Sucursal[]> {
 export async function listSucursalesConUsuarios(): Promise<Sucursal[]> {
   const data = await parse<{ sucursales: Sucursal[] }>(await fetch("/api/admin/usuarios"));
   return data.sucursales;
+}
+
+export async function listAdminUsuarios() {
+  return parse<{ sucursales: Sucursal[]; usuarios: CtzUsuario[] }>(await fetch("/api/admin/usuarios"));
+}
+
+export type UsuarioPayload = {
+  email: string;
+  nombre_completo: string;
+  rol: CtzUsuario["rol"];
+  password?: string;
+  activo: boolean;
+};
+
+export async function createUsuario(payload: UsuarioPayload): Promise<CtzUsuario> {
+  const data = await parse<{ usuario: CtzUsuario }>(
+    await fetch("/api/admin/usuarios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  );
+  return data.usuario;
+}
+
+export async function updateUsuario(id: string, payload: Partial<UsuarioPayload>): Promise<CtzUsuario> {
+  const data = await parse<{ usuario: CtzUsuario }>(
+    await fetch("/api/admin/usuarios", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...payload }),
+    }),
+  );
+  return data.usuario;
+}
+
+export async function deleteUsuario(id: string): Promise<void> {
+  await parse(await fetch("/api/admin/usuarios", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  }));
 }
 
 export async function listProductos(sucursalId?: string): Promise<Producto[]> {

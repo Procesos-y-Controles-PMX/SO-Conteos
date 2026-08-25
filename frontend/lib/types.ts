@@ -31,6 +31,15 @@ export type SessionUser = {
   zona?: string;
 };
 
+export type CtzUsuario = {
+  id: string;
+  email: string;
+  nombre_completo: string | null;
+  rol: Role;
+  activo: boolean;
+  created_at?: string;
+};
+
 export type Sucursal = {
   id: string;
   nombre: string;
