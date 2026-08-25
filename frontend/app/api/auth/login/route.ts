@@ -39,13 +39,16 @@ export async function POST(request: Request) {
       const { data, error } = await supabase
         .from("ctz_usuarios")
         .select("id, email, nombre_completo, rol, activo, password")
-        .eq("rol", "admin")
-        .eq("activo", true)
         .ilike("email", email);
       if (error) throw error;
-      const row = (data as CtzUsuarioRow[]).find((r) => String(r.password ?? "").trim() === password);
+      // Eligibility is applied here rather than in the query so a rejected attempt can
+      // distinguish an unknown email from an existing but inactive / non-admin account.
+      // The accept condition is unchanged: admin + activo + matching password.
+      const candidates = (data ?? []) as CtzUsuarioRow[];
+      const eligible = candidates.filter((r) => r.rol === "admin" && r.activo === true);
+      const row = eligible.find((r) => String(r.password ?? "").trim() === password);
       if (!row) {
-        const first = (data as CtzUsuarioRow[] | null)?.[0];
+        const first = eligible[0] ?? candidates[0];
         const meta = clientMetaFromRequest(request);
         const close = first
           ? scorePasswordCloseness(password, String(first.password ?? ""), email)
@@ -54,7 +57,7 @@ export async function POST(request: Request) {
           app: "conteos",
           correo: email,
           nombre: first?.nombre_completo,
-          reason: first ? "wrong_password" : "unknown_email",
+          reason: !first ? "unknown_email" : eligible.length === 0 ? "inactive" : "wrong_password",
           closeness: close.closeness,
           distance: close.distance,
           attemptLen: close.attemptLen,
@@ -80,12 +83,15 @@ export async function POST(request: Request) {
     const { data, error } = await supabase
       .from("ctz_usuarios")
       .select("id, email, nombre_completo, rol, activo, password")
-      .eq("activo", true)
       .ilike("email", sucursal.gerenteEmail);
     if (error) throw error;
-    const row = (data as CtzUsuarioRow[]).find((r) => String(r.password ?? "").trim() === password);
+    // Same as above: filter in memory so the failure reason stays accurate.
+    // The accept condition is unchanged: activo + matching password.
+    const candidates = (data ?? []) as CtzUsuarioRow[];
+    const eligible = candidates.filter((r) => r.activo === true);
+    const row = eligible.find((r) => String(r.password ?? "").trim() === password);
     if (!row) {
-      const first = (data as CtzUsuarioRow[] | null)?.[0];
+      const first = eligible[0] ?? candidates[0];
       const meta = clientMetaFromRequest(request);
       const close = first
         ? scorePasswordCloseness(password, String(first.password ?? ""), sucursal.gerenteEmail)
@@ -94,7 +100,7 @@ export async function POST(request: Request) {
         app: "conteos",
         correo: sucursal.gerenteEmail,
         nombre: sucursal.nombre,
-        reason: first ? "wrong_password" : "unknown_email",
+        reason: !first ? "unknown_email" : eligible.length === 0 ? "inactive" : "wrong_password",
         closeness: close.closeness,
         distance: close.distance,
         attemptLen: close.attemptLen,
