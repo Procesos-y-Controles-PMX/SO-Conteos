@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { isMajorAdminEmail } from "@/lib/access";
 import type { SoAccount, SoAccountApp, SoAccountsResult, SoAccountsSourceStatus } from "@/lib/so-account-types";
 
 export type { SoAccount, SoAccountApp, SoAccountsResult, SoAccountsSourceStatus } from "@/lib/so-account-types";
@@ -67,6 +68,11 @@ async function selectAll<T extends Record<string, unknown>>(
   return rows;
 }
 
+function accountRolLabel(email: string, label: string) {
+  if (isMajorAdminEmail(email)) return "Administrador general";
+  return label;
+}
+
 function equipoRolLabel(rol: unknown) {
   switch (String(rol ?? "").trim().toUpperCase()) {
     case "ADMIN":
@@ -102,6 +108,14 @@ function cartaRolLabel(rol: unknown) {
     default:
       return String(rol ?? "").trim() || "—";
   }
+}
+
+function permisosRolLabel(nombre: unknown, idRol: unknown) {
+  const raw = String(nombre ?? "").trim();
+  if (raw === "Admin" || Number(idRol) === 1) return "Administrador";
+  if (raw === "Tienda" || Number(idRol) === 2) return "Tienda";
+  if (raw === "Regional" || Number(idRol) === 3) return "Regional";
+  return raw || "—";
 }
 
 async function firstLoginByEmail(equipo: SupabaseClient): Promise<Map<string, string>> {
@@ -151,7 +165,7 @@ async function loadEquipo(): Promise<{ cuentas: SoAccount[]; status: SoAccountsS
         app: "equipo" as const,
         email,
         nombre: textOrNull(row.NOMBRE),
-        rol: equipoRolLabel(row.ROL),
+        rol: accountRolLabel(email, equipoRolLabel(row.ROL)),
         activo: String(row.ACTIVO ?? "").trim().toUpperCase() === "SI",
         alta,
         altaSource: created ? ("created_at" as const) : alta ? ("first_login" as const) : null,
@@ -184,7 +198,7 @@ async function loadCotizador(client: SupabaseClient): Promise<{ cuentas: SoAccou
           app: "cotizador" as const,
           email,
           nombre: textOrNull(row.nombre_completo),
-          rol: cotizadorRolLabel(row.rol),
+          rol: accountRolLabel(email, cotizadorRolLabel(row.rol)),
           activo: row.activo !== false,
           alta,
           altaSource: alta ? ("created_at" as const) : null,
@@ -216,14 +230,12 @@ async function loadPermisos(client: SupabaseClient): Promise<{ cuentas: SoAccoun
         const alta = textOrNull(row.created_at);
         const joined = row.roles as { nombre_rol?: string } | { nombre_rol?: string }[] | null;
         const rolName = Array.isArray(joined) ? joined[0]?.nombre_rol : joined?.nombre_rol;
-        const rolFromId =
-          Number(row.id_rol) === 1 ? "Admin" : Number(row.id_rol) === 2 ? "Tienda" : Number(row.id_rol) === 3 ? "Regional" : "";
         return {
           key: `permisos:${row.id ?? email ?? index}`,
           app: "permisos" as const,
           email,
           nombre: textOrNull(row.nombre_completo),
-          rol: String(rolName ?? "").trim() || rolFromId || "—",
+          rol: accountRolLabel(email, permisosRolLabel(rolName, row.id_rol)),
           activo: null,
           alta,
           altaSource: alta ? ("created_at" as const) : null,
@@ -256,7 +268,7 @@ async function loadCartas(client: SupabaseClient): Promise<{ cuentas: SoAccount[
           app: "carta-responsiva" as const,
           email,
           nombre: textOrNull(row.nombre_completo),
-          rol: cartaRolLabel(row.rol),
+          rol: accountRolLabel(email, cartaRolLabel(row.rol)),
           activo: row.activo !== false,
           alta,
           altaSource: alta ? ("created_at" as const) : null,

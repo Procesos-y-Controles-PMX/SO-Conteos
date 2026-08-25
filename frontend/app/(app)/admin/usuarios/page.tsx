@@ -7,15 +7,15 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
 import SelectDropdown from "@/components/ui/SelectDropdown";
 import UsuarioFormModal from "@/components/usuarios/UsuarioFormModal";
-import { isMajorAdmin } from "@/lib/access";
+import { isMajorAdmin, isMajorAdminEmail } from "@/lib/access";
 import { useAuth } from "@/lib/auth";
 import { SO_ACCOUNT_APP_LABELS, SO_ACCOUNT_APPS, type SoAccount, type SoAccountApp } from "@/lib/so-account-types";
 import { deleteUsuario, listAdminUsuarios, listSoAccounts, updateUsuario } from "@/lib/store";
 import type { CtzUsuario, Role, Sucursal } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
 
-function rolLabel(rol: Role): string {
-  if (rol === "administrador_general") return "Administrador general";
+function rolLabel(rol: Role, email?: string): string {
+  if (isMajorAdminEmail(email) || rol === "administrador_general") return "Administrador general";
   return rol === "admin" ? "Administrador" : "Tienda";
 }
 
@@ -179,7 +179,7 @@ export default function UsuariosPage() {
     const q = query.trim().toLowerCase();
     if (!q) return usuarios;
     return usuarios.filter((row) =>
-      `${row.email} ${row.nombre_completo ?? ""} ${rolLabel(row.rol)}`.toLowerCase().includes(q),
+      `${row.email} ${row.nombre_completo ?? ""} ${rolLabel(row.rol, row.email)}`.toLowerCase().includes(q),
     );
   }, [query, usuarios]);
 
@@ -384,7 +384,7 @@ export default function UsuariosPage() {
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-fg">{row.email}</p>
                     <p className="mt-0.5 text-sm text-fg-muted">{row.nombre_completo?.trim() || "—"}</p>
-                    <p className="mt-1 text-xs text-fg-subtle">{rolLabel(row.rol)}</p>
+                    <p className="mt-1 text-xs text-fg-subtle">{rolLabel(row.rol, row.email)}</p>
                     {showCreated ? (
                       <p className="mt-1 text-xs text-fg-faint">Alta {createdLabel(row.created_at)}</p>
                     ) : null}
@@ -441,7 +441,7 @@ export default function UsuariosPage() {
                     {isSelf ? <span className="text-xs text-amber-700">Tu cuenta (no editable)</span> : null}
                   </td>
                   <td className="px-4 py-2.5">{row.nombre_completo?.trim() || "—"}</td>
-                  <td className="px-4 py-2.5">{rolLabel(row.rol)}</td>
+                  <td className="px-4 py-2.5">{rolLabel(row.rol, row.email)}</td>
                   {showCreated ? (
                     <td className="px-4 py-2.5 font-mono text-xs text-fg-subtle">{createdLabel(row.created_at)}</td>
                   ) : null}
