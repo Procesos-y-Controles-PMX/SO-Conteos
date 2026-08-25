@@ -59,7 +59,7 @@ async function selectAll<T extends Record<string, unknown>>(
   while (true) {
     const { data, error } = await client.from(table).select(columns).range(from, from + PAGE - 1);
     if (error) throw error;
-    const page = ((data ?? []) as unknown as T[]) ?? [];
+    const page = (data ?? []) as unknown as T[];
     rows.push(...page);
     if (page.length < PAGE) break;
     from += PAGE;
