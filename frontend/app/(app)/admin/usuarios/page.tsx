@@ -5,16 +5,25 @@ import { toast } from "sonner";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
 import UsuarioFormModal from "@/components/usuarios/UsuarioFormModal";
+import { isMajorAdmin } from "@/lib/access";
 import { useAuth } from "@/lib/auth";
 import { deleteUsuario, listAdminUsuarios, updateUsuario } from "@/lib/store";
 import type { CtzUsuario, Role, Sucursal } from "@/lib/types";
+import { formatDateTime } from "@/lib/utils";
 
 function rolLabel(rol: Role): string {
+  if (rol === "administrador_general") return "Administrador general";
   return rol === "admin" ? "Administrador" : "Tienda";
+}
+
+function createdLabel(iso?: string) {
+  if (!iso) return "—";
+  return formatDateTime(iso);
 }
 
 export default function UsuariosPage() {
   const { user } = useAuth();
+  const showCreated = isMajorAdmin(user);
   const [usuarios, setUsuarios] = useState<CtzUsuario[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [query, setQuery] = useState("");
@@ -33,6 +42,15 @@ export default function UsuariosPage() {
   useEffect(() => {
     void reload().catch((err: Error) => toast.error(err.message));
   }, []);
+
+  const createdByEmail = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of usuarios) {
+      const email = row.email.trim().toLowerCase();
+      if (email && row.created_at) map.set(email, row.created_at);
+    }
+    return map;
+  }, [usuarios]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -126,6 +144,9 @@ export default function UsuariosPage() {
                     <p className="truncate font-semibold text-fg">{row.email}</p>
                     <p className="mt-0.5 text-sm text-fg-muted">{row.nombre_completo?.trim() || "—"}</p>
                     <p className="mt-1 text-xs text-fg-subtle">{rolLabel(row.rol)}</p>
+                    {showCreated ? (
+                      <p className="mt-1 text-xs text-fg-faint">Alta {createdLabel(row.created_at)}</p>
+                    ) : null}
                   </div>
                   <label className="flex items-center gap-2 text-xs text-fg-muted">
                     <input
@@ -164,6 +185,7 @@ export default function UsuariosPage() {
               <th className="px-4 py-3">Correo</th>
               <th className="px-4 py-3">Nombre</th>
               <th className="px-4 py-3">Rol</th>
+              {showCreated ? <th className="px-4 py-3">Alta</th> : null}
               <th className="px-4 py-3">Activo</th>
               <th className="px-4 py-3">Acciones</th>
             </tr>
@@ -179,6 +201,9 @@ export default function UsuariosPage() {
                   </td>
                   <td className="px-4 py-2.5">{row.nombre_completo?.trim() || "—"}</td>
                   <td className="px-4 py-2.5">{rolLabel(row.rol)}</td>
+                  {showCreated ? (
+                    <td className="px-4 py-2.5 font-mono text-xs text-fg-subtle">{createdLabel(row.created_at)}</td>
+                  ) : null}
                   <td className="px-4 py-2.5">
                     <input
                       type="checkbox"
@@ -212,7 +237,7 @@ export default function UsuariosPage() {
             })}
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-fg-subtle">
+                <td colSpan={showCreated ? 6 : 5} className="px-4 py-10 text-center text-fg-subtle">
                   {query ? "Sin resultados." : "Sin usuarios."}
                 </td>
               </tr>
@@ -235,6 +260,7 @@ export default function UsuariosPage() {
                 <th className="px-4 py-3">Gerente</th>
                 <th className="px-4 py-3">Correo</th>
                 <th className="px-4 py-3">Cuenta</th>
+                {showCreated ? <th className="px-4 py-3">Alta</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -245,6 +271,11 @@ export default function UsuariosPage() {
                   <td className="px-4 py-2.5">{sucursal.gerenteNombre || "—"}</td>
                   <td className="px-4 py-2.5 font-mono text-xs text-fg-faint">{sucursal.gerenteEmail || "—"}</td>
                   <td className="px-4 py-2.5 text-xs">{sucursal.hasAccount ? "Activa" : "Sin usuario"}</td>
+                  {showCreated ? (
+                    <td className="px-4 py-2.5 font-mono text-xs text-fg-subtle">
+                      {createdLabel(createdByEmail.get(sucursal.gerenteEmail.trim().toLowerCase()))}
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>

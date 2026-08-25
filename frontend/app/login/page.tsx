@@ -8,6 +8,7 @@ import { GridLoadingScreen } from "@promexma/ui";
 import LoginShell from "@/components/login/LoginShell";
 import SearchCombobox, { type SearchComboboxOption } from "@/components/ui/SearchCombobox";
 import { loginButtonClass, loginInputClass, loginLabelClass, loginTitleClass } from "@/components/login/loginStyles";
+import { staffHomePath } from "@/lib/access";
 import { loginAdmin, loginSucursal, portalLoginUrl } from "@/lib/auth";
 import { listSucursales } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -62,7 +63,7 @@ export default function LoginPage() {
       return;
     }
     toast.success(`Bienvenido, ${result.user.nombre}`);
-    router.replace(result.user.rol === "admin" ? "/admin" : "/conteos");
+    router.replace(staffHomePath(result.user.rol));
   }
 
   return (

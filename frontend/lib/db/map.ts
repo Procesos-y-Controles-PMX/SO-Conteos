@@ -1,4 +1,5 @@
 import type { SessionUser, Sucursal } from "@/lib/types";
+import { resolveSessionRole } from "@/lib/access";
 
 export type CtzSucursalRow = {
   id: string;
@@ -127,11 +128,13 @@ export function mapSession(
 }
 
 export function mapCtzUser(row: CtzUsuarioRow, extra?: Partial<SessionUser>): SessionUser {
+  const email = extra?.email ?? row.email ?? undefined;
+  const dbRol = extra?.rol ?? row.rol;
   return {
     id: row.id,
-    rol: extra?.rol ?? row.rol,
+    rol: resolveSessionRole(email, dbRol),
     nombre: extra?.nombre ?? row.nombre_completo ?? row.email ?? "",
-    email: row.email ?? undefined,
+    email,
     sucursalId: extra?.sucursalId,
     zona: extra?.zona,
   };

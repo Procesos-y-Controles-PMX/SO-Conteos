@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AccessLogsBoard from "@/components/admin/AccessLogsBoard";
 import PageHeader from "@/components/ui/PageHeader";
+import { isConteosAdmin } from "@/lib/access";
 import { useAuth } from "@/lib/auth";
 
 export default function AccesosPage() {
@@ -11,10 +12,10 @@ export default function AccesosPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && user?.rol !== "admin") router.replace("/conteos");
+    if (!loading && !isConteosAdmin(user?.rol)) router.replace("/conteos");
   }, [loading, user, router]);
 
-  if (loading || user?.rol !== "admin") return null;
+  if (loading || !isConteosAdmin(user?.rol)) return null;
 
   return (
     <div>

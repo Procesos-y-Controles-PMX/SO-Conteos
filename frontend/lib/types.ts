@@ -1,4 +1,4 @@
-export type Role = "admin" | "tienda";
+export type Role = "admin" | "tienda" | "administrador_general";
 
 export type CountKind = "semanal" | "urgente";
 

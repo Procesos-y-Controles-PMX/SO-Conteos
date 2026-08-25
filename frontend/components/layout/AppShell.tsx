@@ -20,6 +20,7 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import ThemeToggle from "@/components/ui/ThemeToggle";
+import { isConteosAdmin, sessionRoleLabel } from "@/lib/access";
 import { goToLogin, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -27,19 +28,19 @@ type NavItem = {
   label: string;
   href: string;
   icon: ReactNode;
-  roles: Array<"admin" | "tienda">;
+  roles: Array<"admin" | "administrador_general" | "tienda">;
 };
 
 const NAV: NavItem[] = [
   { label: "Conteos", href: "/conteos", icon: <ClipboardList className="h-[18px] w-[18px]" />, roles: ["tienda"] },
   { label: "Semanales", href: "/conteos/semanales", icon: <LayoutGrid className="h-[18px] w-[18px]" />, roles: ["tienda"] },
   { label: "Urgentes", href: "/conteos/urgentes", icon: <Siren className="h-[18px] w-[18px]" />, roles: ["tienda"] },
-  { label: "Semáforo", href: "/admin", icon: <LayoutGrid className="h-[18px] w-[18px]" />, roles: ["admin"] },
-  { label: "Inventario", href: "/admin/inventario", icon: <Package className="h-[18px] w-[18px]" />, roles: ["admin"] },
-  { label: "Nuevo urgente", href: "/admin/urgentes/nuevo", icon: <Bell className="h-[18px] w-[18px]" />, roles: ["admin"] },
-  { label: "Descargas", href: "/admin/descargas", icon: <Download className="h-[18px] w-[18px]" />, roles: ["admin"] },
-  { label: "Usuarios", href: "/admin/usuarios", icon: <Users className="h-[18px] w-[18px]" />, roles: ["admin"] },
-  { label: "Accesos", href: "/admin/accesos", icon: <Shield className="h-[18px] w-[18px]" />, roles: ["admin"] },
+  { label: "Semáforo", href: "/admin", icon: <LayoutGrid className="h-[18px] w-[18px]" />, roles: ["admin", "administrador_general"] },
+  { label: "Inventario", href: "/admin/inventario", icon: <Package className="h-[18px] w-[18px]" />, roles: ["admin", "administrador_general"] },
+  { label: "Nuevo urgente", href: "/admin/urgentes/nuevo", icon: <Bell className="h-[18px] w-[18px]" />, roles: ["admin", "administrador_general"] },
+  { label: "Descargas", href: "/admin/descargas", icon: <Download className="h-[18px] w-[18px]" />, roles: ["admin", "administrador_general"] },
+  { label: "Usuarios", href: "/admin/usuarios", icon: <Users className="h-[18px] w-[18px]" />, roles: ["admin", "administrador_general"] },
+  { label: "Accesos", href: "/admin/accesos", icon: <Shield className="h-[18px] w-[18px]" />, roles: ["admin", "administrador_general"] },
 ];
 
 export default function AppShell({ children }: { children: ReactNode }) {
@@ -74,7 +75,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
-  const sucursalZona = user.zona;
   const isCountSession = /^\/conteos\/[^/]+$/.test(pathname);
 
   function handleLogout() {
@@ -90,7 +90,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         )}
       >
         <div className="flex h-16 shrink-0 items-center justify-between px-5">
-          <Link href={user.rol === "admin" ? "/admin" : "/conteos"} className="flex min-w-0 items-center gap-2.5">
+          <Link href={isConteosAdmin(user.rol) ? "/admin" : "/conteos"} className="flex min-w-0 items-center gap-2.5">
             <Image
               src="/circulo-promexma.png"
               alt="Promexma"
@@ -155,7 +155,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-fg-faint">Sesión</p>
                 <p className="mt-0.5 truncate text-xs font-semibold text-fg">{user.nombre}</p>
                 <p className="truncate text-[10px] text-fg-faint">
-                  {user.rol === "admin" ? "Administrador" : sucursalZona}
+                  {sessionRoleLabel(user)}
                 </p>
               </div>
               <div className="flex items-center justify-between gap-2">

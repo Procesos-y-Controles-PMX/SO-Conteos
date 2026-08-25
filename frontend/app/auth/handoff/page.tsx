@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 import { GridLoadingScreen, InteractiveGridPattern } from "@promexma/ui";
+import { staffHomePath } from "@/lib/access";
 import { portalLoginUrl, setCurrentUser } from "@/lib/auth";
 import type { SessionUser } from "@/lib/types";
 
@@ -43,7 +44,7 @@ function HandoffInner() {
         }
 
         setCurrentUser(payload.user);
-        window.location.replace(payload.user.rol === "admin" ? "/admin" : "/conteos");
+        window.location.replace(staffHomePath(payload.user.rol));
       } catch {
         setError("No se pudo contactar al servidor.");
       }

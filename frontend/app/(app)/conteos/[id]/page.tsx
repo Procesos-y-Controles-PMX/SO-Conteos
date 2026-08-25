@@ -9,6 +9,7 @@ import DiffReview from "@/components/conteos/DiffReview";
 import IdentityGate from "@/components/conteos/IdentityGate";
 import SkuStepper from "@/components/conteos/SkuStepper";
 import PageHeader from "@/components/ui/PageHeader";
+import { isConteosAdmin } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { deleteConteo, getSession, patchLine, patchSession, submitSession } from "@/lib/store";
 import { scopeWeeklySession } from "@/lib/catalog/polvos";
@@ -104,7 +105,7 @@ export default function CountSessionPage() {
   }
 
   const current = scopeWeeklySession(session);
-  const adminView = user?.rol === "admin";
+  const adminView = isConteosAdmin(user?.rol);
   const { filled, total } = countProgress(current);
   const safeIndex = Math.min(skuIndex, Math.max(0, current.lines.length - 1));
   const locked = current.status === "enviado";
