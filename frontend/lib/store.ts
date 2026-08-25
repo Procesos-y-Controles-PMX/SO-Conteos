@@ -1,4 +1,5 @@
 import { decodeSpreadsheetBuffer, keepConteoSpreadsheet, parseDelimitedText } from "@/lib/excel/parseInventario";
+import type { SoAccount, SoAccountsSourceStatus } from "@/lib/so-account-types";
 import type { CountKind, CountLine, CountSession, CtzUsuario, InventarioMeta, Producto, SemaforoResumen, Sucursal, ZonaSemaforo } from "@/lib/types";
 
 export type InventarioPayload = {
@@ -34,6 +35,14 @@ export async function listSucursalesConUsuarios(): Promise<Sucursal[]> {
 
 export async function listAdminUsuarios() {
   return parse<{ sucursales: Sucursal[]; usuarios: CtzUsuario[] }>(await fetch("/api/admin/usuarios"));
+}
+
+export async function listSoAccounts(viewerEmail: string) {
+  const params = new URLSearchParams({ viewer: viewerEmail });
+  return parse<{
+    cuentas: SoAccount[];
+    sources: Record<SoAccount["app"], SoAccountsSourceStatus>;
+  }>(await fetch(`/api/admin/cuentas?${params}`));
 }
 
 export type UsuarioPayload = {

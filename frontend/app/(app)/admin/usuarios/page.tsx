@@ -7,7 +7,8 @@ import PageHeader from "@/components/ui/PageHeader";
 import UsuarioFormModal from "@/components/usuarios/UsuarioFormModal";
 import { isMajorAdmin } from "@/lib/access";
 import { useAuth } from "@/lib/auth";
-import { deleteUsuario, listAdminUsuarios, updateUsuario } from "@/lib/store";
+import { SO_ACCOUNT_APP_LABELS, SO_ACCOUNT_APPS, type SoAccount, type SoAccountApp } from "@/lib/so-account-types";
+import { deleteUsuario, listAdminUsuarios, listSoAccounts, updateUsuario } from "@/lib/store";
 import type { CtzUsuario, Role, Sucursal } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
 
@@ -26,6 +27,8 @@ export default function UsuariosPage() {
   const showCreated = isMajorAdmin(user);
   const [usuarios, setUsuarios] = useState<CtzUsuario[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [cuentas, setCuentas] = useState<SoAccount[]>([]);
+  const [cuentaApp, setCuentaApp] = useState<"todas" | SoAccountApp>("todas");
   const [query, setQuery] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
@@ -43,6 +46,13 @@ export default function UsuariosPage() {
     void reload().catch((err: Error) => toast.error(err.message));
   }, []);
 
+  useEffect(() => {
+    if (!showCreated || !user?.email) return;
+    void listSoAccounts(user.email)
+      .then((data) => setCuentas(data.cuentas ?? []))
+      .catch((err: Error) => toast.error(err.message));
+  }, [showCreated, user?.email]);
+
   const createdByEmail = useMemo(() => {
     const map = new Map<string, string>();
     for (const row of usuarios) {
@@ -59,6 +69,16 @@ export default function UsuariosPage() {
       `${row.email} ${row.nombre_completo ?? ""} ${rolLabel(row.rol)}`.toLowerCase().includes(q),
     );
   }, [query, usuarios]);
+
+  const visibleCuentas = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return cuentas.filter((row) => {
+      if (cuentaApp !== "todas" && row.app !== cuentaApp) return false;
+      if (!q) return true;
+      const haystack = `${SO_ACCOUNT_APP_LABELS[row.app]} ${row.email} ${row.nombre ?? ""} ${row.rol}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [cuentas, cuentaApp, query]);
 
   function openCreate() {
     setFormMode("create");
@@ -114,7 +134,11 @@ export default function UsuariosPage() {
       <PageHeader
         eyebrow="Administración"
         title="Usuarios"
-        subtitle="Cuentas de Cotizador/Conteos. El login de tienda usa la contraseña del gerente de esa sucursal."
+        subtitle={
+          showCreated
+            ? "Directorio de todas las cuentas SO, más el alta y edición de Cotizador/Conteos."
+            : "Cuentas de Cotizador/Conteos. El login de tienda usa la contraseña del gerente de esa sucursal."
+        }
         actions={
           <button type="button" className="btn-primary" onClick={openCreate}>
             + Nuevo usuario
@@ -122,19 +146,113 @@ export default function UsuariosPage() {
         }
       />
 
-      <label className="block text-[10px] font-bold uppercase tracking-wider text-fg-faint">
-        Buscar (correo o nombre)
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Ej. garcia@cemex.com"
-          className="input-field mt-1.5"
-        />
-      </label>
+      <div className={showCreated ? "grid gap-4 md:grid-cols-[1fr_16rem]" : undefined}>
+        <label className="block text-[10px] font-bold uppercase tracking-wider text-fg-faint">
+          Buscar (correo o nombre)
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Ej. garcia@cemex.com"
+            className="input-field mt-1.5"
+          />
+        </label>
+        {showCreated ? (
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-fg-faint">
+            App
+            <select
+              value={cuentaApp}
+              onChange={(event) => setCuentaApp(event.target.value as "todas" | SoAccountApp)}
+              className="input-field mt-1.5"
+            >
+              <option value="todas">Todas</option>
+              {SO_ACCOUNT_APPS.map((app) => (
+                <option key={app} value={app}>
+                  {SO_ACCOUNT_APP_LABELS[app]}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      </div>
 
-      <div className="neu-raised overflow-hidden rounded-lg">
-        <div className="divide-y divide-line-subtle md:hidden">
+      {showCreated ? (
+        <div>
+          <h2 className="mb-1 font-display text-base font-semibold text-fg">Cuentas de todas las apps</h2>
+          <p className="mb-3 text-sm text-fg-subtle">
+            Equipo Móvil, Cotizador/Conteos, Permisos y Cartas Responsivas. En Equipo Móvil no hay fecha de alta en la
+            cuenta; se muestra el primer login registrado.
+          </p>
+          <div className="neu-raised overflow-hidden rounded-lg">
+            <div className="divide-y divide-line-subtle md:hidden">
+              {visibleCuentas.map((row) => (
+                <article key={row.key} className="space-y-1 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-fg-faint">
+                    {SO_ACCOUNT_APP_LABELS[row.app]}
+                  </p>
+                  <p className="truncate font-semibold text-fg">{row.email}</p>
+                  <p className="text-sm text-fg-muted">{row.nombre || "—"}</p>
+                  <p className="text-xs text-fg-subtle">{row.rol}</p>
+                  <p className="text-xs text-fg-faint">
+                    Alta {createdLabel(row.alta ?? undefined)}
+                    {row.altaSource === "first_login" ? " (primer login)" : ""}
+                    {row.activo == null ? "" : row.activo ? " · Activo" : " · Inactivo"}
+                  </p>
+                </article>
+              ))}
+              {visibleCuentas.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-fg-subtle">
+                  {query || cuentaApp !== "todas" ? "Sin resultados." : "Sin cuentas."}
+                </p>
+              ) : null}
+            </div>
+
+            <table className="hidden min-w-full text-left text-sm md:table">
+              <thead>
+                <tr className="text-[10px] font-bold uppercase tracking-wider text-fg-faint">
+                  <th className="px-4 py-3">App</th>
+                  <th className="px-4 py-3">Correo</th>
+                  <th className="px-4 py-3">Nombre</th>
+                  <th className="px-4 py-3">Rol</th>
+                  <th className="px-4 py-3">Activo</th>
+                  <th className="px-4 py-3">Alta</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleCuentas.map((row) => (
+                  <tr key={row.key} className="border-t border-line-subtle">
+                    <td className="px-4 py-2.5 text-fg-subtle">{SO_ACCOUNT_APP_LABELS[row.app]}</td>
+                    <td className="px-4 py-2.5 font-semibold text-fg">{row.email}</td>
+                    <td className="px-4 py-2.5">{row.nombre || "—"}</td>
+                    <td className="px-4 py-2.5">{row.rol}</td>
+                    <td className="px-4 py-2.5 text-xs">
+                      {row.activo == null ? "—" : row.activo ? "Activo" : "Inactivo"}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-fg-subtle">
+                      {createdLabel(row.alta ?? undefined)}
+                      {row.altaSource === "first_login" ? (
+                        <span className="ml-1 font-sans text-fg-faint">(primer login)</span>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+                {visibleCuentas.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-10 text-center text-fg-subtle">
+                      {query || cuentaApp !== "todas" ? "Sin resultados." : "Sin cuentas."}
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      <div>
+        <h2 className="mb-3 font-display text-base font-semibold text-fg">Cuentas de Cotizador / Conteos</h2>
+        <div className="neu-raised overflow-hidden rounded-lg">
+          <div className="divide-y divide-line-subtle md:hidden">
           {visible.map((row) => {
             const isSelf = row.id === user?.id;
             return (
@@ -244,6 +362,7 @@ export default function UsuariosPage() {
             ) : null}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div>
