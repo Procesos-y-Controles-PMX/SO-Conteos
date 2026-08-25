@@ -1,7 +1,7 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
 import { fetchSessions, fetchSucursales } from "@/lib/db/queries";
 import { sessionSemaforo, type CountSession, type SemaforoResumen, type Sucursal } from "@/lib/types";
-import { weekKeyFromDate } from "@/lib/week";
+import { weekKeyFromDate, nearbyWeekKeys } from "@/lib/week";
 
 export const dynamic = "force-dynamic";
 
@@ -47,11 +47,22 @@ export async function GET(request: Request) {
     const scope = new Set(filtered.map((s) => s.id));
     const scoped = weekSessions.filter((s) => scope.has(s.sucursalId));
     const pageIds = new Set(pageRows.map((s) => s.id));
+    const historyWeeks = nearbyWeekKeys(weekKey, 4).slice().reverse();
+    const history = pageRows.length
+      ? await fetchSessions(resolved.supabase, {
+          sucursalIds: pageRows.map((s) => s.id),
+          kind: "semanal",
+          weekKeys: historyWeeks,
+          includeLines: false,
+        })
+      : [];
     return ok({
       weekKey,
+      historyWeeks,
       sucursales: pageRows,
       zonas,
       sessions: scoped.filter((s) => pageIds.has(s.sucursalId)),
+      history,
       total,
       page,
       pageSize: PAGE_SIZE,

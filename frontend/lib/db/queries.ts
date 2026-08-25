@@ -180,6 +180,7 @@ export async function fetchSessions(
     sucursalIds?: string[];
     kind?: CountKind;
     weekKey?: string;
+    weekKeys?: string[];
     includeLines?: boolean;
   },
 ): Promise<CountSession[]> {
@@ -187,7 +188,8 @@ export async function fetchSessions(
   if (filters.sucursalId) q = q.eq("id_sucursal", filters.sucursalId);
   if (filters.sucursalIds?.length) q = q.in("id_sucursal", filters.sucursalIds);
   if (filters.kind) q = q.eq("kind", filters.kind);
-  if (filters.weekKey) q = q.eq("week_key", filters.weekKey);
+  if (filters.weekKeys?.length) q = q.in("week_key", filters.weekKeys);
+  else if (filters.weekKey) q = q.eq("week_key", filters.weekKey);
   const { data, error } = await q;
   if (error) throw error;
   const rows = (data ?? []) as CntConteoRow[];

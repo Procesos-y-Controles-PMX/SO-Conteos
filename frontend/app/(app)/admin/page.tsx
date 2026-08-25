@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import SemaforoDot from "@/components/conteos/SemaforoDot";
 import WeekBoard from "@/components/conteos/WeekBoard";
+import WeekHistory from "@/components/conteos/WeekHistory";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
 import SelectDropdown from "@/components/ui/SelectDropdown";
@@ -56,6 +57,8 @@ export default function AdminSemaforoPage() {
   const [pending, setPending] = useState<{ session: CountSession; nombre: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [resumen, setResumen] = useState<SemaforoResumen | null>(null);
+  const [historyWeeks, setHistoryWeeks] = useState<string[]>([]);
+  const [history, setHistory] = useState<CountSession[]>([]);
 
   useEffect(() => {
     setLoading(true);
@@ -67,17 +70,27 @@ export default function AdminSemaforoPage() {
         setTotal(data.total ?? data.sucursales.length);
         setPageSize(data.pageSize ?? 12);
         setResumen(data.resumen ?? null);
+        setHistoryWeeks(data.historyWeeks ?? []);
+        setHistory(data.history ?? []);
         setError(null);
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
   }, [weekKey, zona, page]);
 
-  const rows = sucursales.map((sucursal) => ({
-    sucursal,
-    weekly: sessions.find((s) => s.sucursalId === sucursal.id && s.kind === "semanal"),
-    urgentes: sessions.filter((s) => s.sucursalId === sucursal.id && s.kind === "urgente"),
-  }));
+  const rows = sucursales.map((sucursal) => {
+    const doneByWeek: Record<string, boolean> = {};
+    for (const session of history) {
+      if (session.sucursalId !== sucursal.id || session.kind !== "semanal") continue;
+      if (session.status === "enviado") doneByWeek[session.weekKey] = true;
+    }
+    return {
+      sucursal,
+      weekly: sessions.find((s) => s.sucursalId === sucursal.id && s.kind === "semanal"),
+      urgentes: sessions.filter((s) => s.sucursalId === sucursal.id && s.kind === "urgente"),
+      doneByWeek,
+    };
+  });
   const grouped = Array.from(new Set(sucursales.map((s) => s.zona))).map((z) => ({
     zona: z,
     rows: rows.filter((r) => r.sucursal.zona === z),
@@ -98,6 +111,8 @@ export default function AdminSemaforoPage() {
       setSessions(data.sessions);
       setTotal(data.total ?? data.sucursales.length);
       setResumen(data.resumen ?? null);
+      setHistoryWeeks(data.historyWeeks ?? []);
+      setHistory(data.history ?? []);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo borrar.");
     } finally {
@@ -136,7 +151,7 @@ export default function AdminSemaforoPage() {
           <section key={group.zona}>
             <h2 className="mb-3 font-display text-lg font-semibold text-fg">{group.zona}</h2>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {group.rows.map(({ sucursal, weekly, urgentes }) => {
+              {group.rows.map(({ sucursal, weekly, urgentes, doneByWeek }) => {
                 const status = sessionSemaforo(weekly);
                 return (
                 <article key={sucursal.id} className="neu-raised relative rounded-lg">
@@ -158,7 +173,8 @@ export default function AdminSemaforoPage() {
                     </div>
                     <SemaforoDot value={status} />
                   </div>
-                  <dl className="mt-3 space-y-1 text-xs text-fg-subtle">
+                  <div className="mt-3 flex items-end justify-between gap-3">
+                  <dl className="min-w-0 flex-1 space-y-1 text-xs text-fg-subtle">
                     <div className="flex justify-between gap-3">
                       <dt>Semanal</dt>
                       <dd className="truncate text-right">{weekly?.counterName ?? "—"}</dd>
@@ -172,6 +188,8 @@ export default function AdminSemaforoPage() {
                       </dd>
                     </div>
                   </dl>
+                  <WeekHistory weeks={historyWeeks} doneByWeek={doneByWeek} />
+                  </div>
                   <div className="mt-3 space-y-2">
                     {weekly ? (
                       <CountAction

@@ -157,6 +157,8 @@ export async function fetchSemaforo(weekKey?: string, opts?: { zona?: string; pa
     sucursales: Sucursal[];
     zonas: string[];
     sessions: CountSession[];
+    history?: CountSession[];
+    historyWeeks?: string[];
     total: number;
     page: number;
     pageSize: number;
