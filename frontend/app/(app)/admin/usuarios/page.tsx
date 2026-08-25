@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
 import SelectDropdown from "@/components/ui/SelectDropdown";
@@ -28,6 +29,111 @@ const APP_FILTER_OPTIONS = [
   ...SO_ACCOUNT_APPS.map((app) => ({ id: app, label: SO_ACCOUNT_APP_LABELS[app] })),
 ];
 
+type CuentaSort = "app" | "email" | "nombre" | "rol" | "activo" | "alta";
+type SortDir = "asc" | "desc";
+
+const SORT_COLUMNS: Array<{ id: CuentaSort; label: string }> = [
+  { id: "alta", label: "Alta" },
+  { id: "email", label: "Correo" },
+  { id: "nombre", label: "Nombre" },
+  { id: "app", label: "App" },
+  { id: "rol", label: "Rol" },
+  { id: "activo", label: "Activo" },
+];
+
+function sortId(key: CuentaSort, dir: SortDir) {
+  return `${key}-${dir}`;
+}
+
+function parseSort(id: string): { key: CuentaSort; dir: SortDir } {
+  const [key, dir] = id.split("-") as [CuentaSort, SortDir];
+  if (!SORT_COLUMNS.some((col) => col.id === key) || (dir !== "asc" && dir !== "desc")) {
+    return { key: "alta", dir: "desc" };
+  }
+  return { key, dir };
+}
+
+function sortLabel(key: CuentaSort, dir: SortDir) {
+  if (key === "alta") return dir === "desc" ? "Alta · más reciente" : "Alta · más antigua";
+  if (key === "activo") return dir === "desc" ? "Activos primero" : "Inactivos primero";
+  const name = SORT_COLUMNS.find((col) => col.id === key)?.label ?? key;
+  return dir === "asc" ? `${name} A–Z` : `${name} Z–A`;
+}
+
+const SORT_OPTIONS = SORT_COLUMNS.flatMap((col) => {
+  const dirs: SortDir[] = col.id === "alta" || col.id === "activo" ? ["desc", "asc"] : ["asc", "desc"];
+  return dirs.map((dir) => ({ id: sortId(col.id, dir), label: sortLabel(col.id, dir) }));
+});
+
+function cuentaSortValue(row: SoAccount, key: CuentaSort): string | number {
+  switch (key) {
+    case "app":
+      return SO_ACCOUNT_APP_LABELS[row.app];
+    case "email":
+      return row.email;
+    case "nombre":
+      return row.nombre ?? "";
+    case "rol":
+      return row.rol;
+    case "activo":
+      return row.activo === true ? 2 : row.activo === false ? 1 : 0;
+    case "alta":
+      return row.alta ?? "";
+  }
+}
+
+function compareCuentas(a: SoAccount, b: SoAccount, key: CuentaSort, dir: SortDir) {
+  if (key === "alta") {
+    if (!a.alta && !b.alta) return a.email.localeCompare(b.email, "es");
+    if (!a.alta) return 1;
+    if (!b.alta) return -1;
+  }
+  const av = cuentaSortValue(a, key);
+  const bv = cuentaSortValue(b, key);
+  const cmp =
+    typeof av === "number" && typeof bv === "number"
+      ? av - bv
+      : String(av).localeCompare(String(bv), "es", { sensitivity: "base", numeric: true });
+  if (cmp !== 0) return dir === "asc" ? cmp : -cmp;
+  return a.email.localeCompare(b.email, "es");
+}
+
+function SortHead({
+  label,
+  col,
+  sortKey,
+  sortDir,
+  onSort,
+}: {
+  label: string;
+  col: CuentaSort;
+  sortKey: CuentaSort;
+  sortDir: SortDir;
+  onSort: (col: CuentaSort) => void;
+}) {
+  const active = col === sortKey;
+  return (
+    <th className="px-4 py-3">
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-fg"
+        onClick={() => onSort(col)}
+      >
+        {label}
+        {active ? (
+          sortDir === "asc" ? (
+            <ChevronUp className="h-3 w-3 text-fg" aria-hidden />
+          ) : (
+            <ChevronDown className="h-3 w-3 text-fg" aria-hidden />
+          )
+        ) : (
+          <ChevronsUpDown className="h-3 w-3 opacity-30" aria-hidden />
+        )}
+      </button>
+    </th>
+  );
+}
+
 export default function UsuariosPage() {
   const { user } = useAuth();
   const showCreated = isMajorAdmin(user);
@@ -35,6 +141,7 @@ export default function UsuariosPage() {
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [cuentas, setCuentas] = useState<SoAccount[]>([]);
   const [cuentaApp, setCuentaApp] = useState<"todas" | SoAccountApp>("todas");
+  const [cuentaSort, setCuentaSort] = useState(sortId("alta", "desc"));
   const [query, setQuery] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
@@ -76,15 +183,26 @@ export default function UsuariosPage() {
     );
   }, [query, usuarios]);
 
+  const { key: sortKey, dir: sortDir } = parseSort(cuentaSort);
+
   const visibleCuentas = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return cuentas.filter((row) => {
+    const filtered = cuentas.filter((row) => {
       if (cuentaApp !== "todas" && row.app !== cuentaApp) return false;
       if (!q) return true;
       const haystack = `${SO_ACCOUNT_APP_LABELS[row.app]} ${row.email} ${row.nombre ?? ""} ${row.rol}`.toLowerCase();
       return haystack.includes(q);
     });
-  }, [cuentas, cuentaApp, query]);
+    return [...filtered].sort((a, b) => compareCuentas(a, b, sortKey, sortDir));
+  }, [cuentas, cuentaApp, query, sortKey, sortDir]);
+
+  function handleCuentaSort(col: CuentaSort) {
+    if (col === sortKey) {
+      setCuentaSort(sortId(col, sortDir === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setCuentaSort(sortId(col, col === "alta" || col === "activo" ? "desc" : "asc"));
+  }
 
   function openCreate() {
     setFormMode("create");
@@ -152,7 +270,7 @@ export default function UsuariosPage() {
         }
       />
 
-      <div className={showCreated ? "grid gap-4 md:grid-cols-[1fr_16rem]" : undefined}>
+      <div className={showCreated ? "grid gap-4 md:grid-cols-[1fr_12rem_16rem]" : undefined}>
         <label className="block text-[10px] font-bold uppercase tracking-wider text-fg-faint">
           Buscar (correo o nombre)
           <input
@@ -164,14 +282,20 @@ export default function UsuariosPage() {
           />
         </label>
         {showCreated ? (
-          <label className="block">
-            <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-fg-faint">App</span>
-            <SelectDropdown
-              value={cuentaApp}
-              onChange={(id) => setCuentaApp(id as "todas" | SoAccountApp)}
-              options={APP_FILTER_OPTIONS}
-            />
-          </label>
+          <>
+            <label className="block">
+              <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-fg-faint">App</span>
+              <SelectDropdown
+                value={cuentaApp}
+                onChange={(id) => setCuentaApp(id as "todas" | SoAccountApp)}
+                options={APP_FILTER_OPTIONS}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-fg-faint">Orden</span>
+              <SelectDropdown value={cuentaSort} onChange={setCuentaSort} options={SORT_OPTIONS} />
+            </label>
+          </>
         ) : null}
       </div>
 
@@ -209,12 +333,12 @@ export default function UsuariosPage() {
             <table className="hidden min-w-full text-left text-sm md:table">
               <thead>
                 <tr className="text-[10px] font-bold uppercase tracking-wider text-fg-faint">
-                  <th className="px-4 py-3">App</th>
-                  <th className="px-4 py-3">Correo</th>
-                  <th className="px-4 py-3">Nombre</th>
-                  <th className="px-4 py-3">Rol</th>
-                  <th className="px-4 py-3">Activo</th>
-                  <th className="px-4 py-3">Alta</th>
+                  <SortHead label="App" col="app" sortKey={sortKey} sortDir={sortDir} onSort={handleCuentaSort} />
+                  <SortHead label="Correo" col="email" sortKey={sortKey} sortDir={sortDir} onSort={handleCuentaSort} />
+                  <SortHead label="Nombre" col="nombre" sortKey={sortKey} sortDir={sortDir} onSort={handleCuentaSort} />
+                  <SortHead label="Rol" col="rol" sortKey={sortKey} sortDir={sortDir} onSort={handleCuentaSort} />
+                  <SortHead label="Activo" col="activo" sortKey={sortKey} sortDir={sortDir} onSort={handleCuentaSort} />
+                  <SortHead label="Alta" col="alta" sortKey={sortKey} sortDir={sortDir} onSort={handleCuentaSort} />
                 </tr>
               </thead>
               <tbody>
