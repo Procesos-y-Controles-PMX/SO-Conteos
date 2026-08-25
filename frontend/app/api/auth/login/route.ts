@@ -1,7 +1,8 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
 import { mapCtzUser, type CtzUsuarioRow } from "@/lib/db/map";
 import { fetchSucursalById } from "@/lib/db/stores";
-import { clientMetaFromRequest, logSoAccess } from "@/lib/so-access-log";
+import { clientMetaFromRequest, logSoAccess, logSoFailedAccess } from "@/lib/so-access-log";
+import { scorePasswordCloseness } from "@/lib/password-closeness";
 import type { SessionUser } from "@/lib/types";
 
 function logLogin(request: Request, user: SessionUser, fallbackEmail?: string) {
@@ -43,7 +44,26 @@ export async function POST(request: Request) {
         .ilike("email", email);
       if (error) throw error;
       const row = (data as CtzUsuarioRow[]).find((r) => String(r.password ?? "").trim() === password);
-      if (!row) return fail("Credenciales inválidas.", 401);
+      if (!row) {
+        const first = (data as CtzUsuarioRow[] | null)?.[0];
+        const meta = clientMetaFromRequest(request);
+        const close = first
+          ? scorePasswordCloseness(password, String(first.password ?? ""), email)
+          : { closeness: "n_a" as const, distance: null, attemptLen: password.length, hint: null };
+        void logSoFailedAccess({
+          app: "conteos",
+          correo: email,
+          nombre: first?.nombre_completo,
+          reason: first ? "wrong_password" : "unknown_email",
+          closeness: close.closeness,
+          distance: close.distance,
+          attemptLen: close.attemptLen,
+          hint: close.hint,
+          ip: meta.ip,
+          userAgent: meta.userAgent,
+        });
+        return fail("Credenciales inválidas.", 401);
+      }
       const user = mapCtzUser(row);
       logLogin(request, user);
       return ok({ user });
@@ -64,7 +84,28 @@ export async function POST(request: Request) {
       .ilike("email", sucursal.gerenteEmail);
     if (error) throw error;
     const row = (data as CtzUsuarioRow[]).find((r) => String(r.password ?? "").trim() === password);
-    if (!row) return fail("Contraseña incorrecta para esta sucursal.", 401);
+    if (!row) {
+      const first = (data as CtzUsuarioRow[] | null)?.[0];
+      const meta = clientMetaFromRequest(request);
+      const close = first
+        ? scorePasswordCloseness(password, String(first.password ?? ""), sucursal.gerenteEmail)
+        : { closeness: "n_a" as const, distance: null, attemptLen: password.length, hint: null };
+      void logSoFailedAccess({
+        app: "conteos",
+        correo: sucursal.gerenteEmail,
+        nombre: sucursal.nombre,
+        reason: first ? "wrong_password" : "unknown_email",
+        closeness: close.closeness,
+        distance: close.distance,
+        attemptLen: close.attemptLen,
+        hint: close.hint,
+        sucursal: sucursal.nombre,
+        region: sucursal.zona,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+      });
+      return fail("Contraseña incorrecta para esta sucursal.", 401);
+    }
 
     const user = mapCtzUser(row, {
       rol: "tienda",
