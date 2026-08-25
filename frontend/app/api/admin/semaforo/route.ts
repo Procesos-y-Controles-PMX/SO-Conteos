@@ -1,11 +1,9 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
 import { fetchSessions, fetchSucursales } from "@/lib/db/queries";
-import { sessionSemaforo, type CountSession, type SemaforoResumen, type Sucursal } from "@/lib/types";
+import { sessionSemaforo, type CountSession, type SemaforoResumen, type Sucursal, type ZonaSemaforo } from "@/lib/types";
 import { weekKeyFromDate, nearbyWeekKeys } from "@/lib/week";
 
 export const dynamic = "force-dynamic";
-
-const PAGE_SIZE = 12;
 
 function resumenFor(sucursales: Sucursal[], sessions: CountSession[]): SemaforoResumen {
   const weekly = new Map(
@@ -29,44 +27,77 @@ function resumenFor(sucursales: Sucursal[], sessions: CountSession[]): SemaforoR
   };
 }
 
+function zonasFor(sucursales: Sucursal[], sessions: CountSession[]): ZonaSemaforo[] {
+  const names = Array.from(new Set(sucursales.map((s) => s.zona))).sort((a, b) => a.localeCompare(b, "es"));
+  return names.map((id) => {
+    const rows = sucursales.filter((s) => s.zona === id);
+    const ids = new Set(rows.map((s) => s.id));
+    const scoped = sessions.filter((s) => ids.has(s.sucursalId));
+    const resumen = resumenFor(rows, scoped);
+    return {
+      id,
+      sucursales: rows.length,
+      contado: resumen.contado,
+      curso: resumen.curso,
+      pendiente: resumen.pendiente,
+    };
+  });
+}
+
 export async function GET(request: Request) {
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   const url = new URL(request.url);
   const weekKey = url.searchParams.get("weekKey") ?? weekKeyFromDate();
-  const zona = url.searchParams.get("zona") || "todas";
-  const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+  const zona = url.searchParams.get("zona")?.trim() || "";
   try {
     const sucursales = await fetchSucursales(resolved.supabase, true);
-    const zonas = Array.from(new Set(sucursales.map((s) => s.zona))).sort((a, b) => a.localeCompare(b, "es"));
-    const filtered = zona === "todas" ? sucursales : sucursales.filter((s) => s.zona === zona);
-    const total = filtered.length;
-    const start = (page - 1) * PAGE_SIZE;
-    const pageRows = filtered.slice(start, start + PAGE_SIZE);
     const weekSessions = await fetchSessions(resolved.supabase, { weekKey, includeLines: false });
+    const zonaOpciones = zonasFor(sucursales, weekSessions);
+    const zonas = zonaOpciones.map((z) => z.id);
+    const historyWeeks = nearbyWeekKeys(weekKey, 4).slice().reverse();
+    const nacional = resumenFor(sucursales, weekSessions);
+
+    if (!zona) {
+      return ok({
+        weekKey,
+        historyWeeks,
+        sucursales: [],
+        zonas,
+        zonaOpciones,
+        sessions: [],
+        history: [],
+        total: 0,
+        page: 1,
+        pageSize: 0,
+        resumen: nacional,
+      });
+    }
+
+    const filtered = sucursales.filter((s) => s.zona === zona);
     const scope = new Set(filtered.map((s) => s.id));
     const scoped = weekSessions.filter((s) => scope.has(s.sucursalId));
-    const pageIds = new Set(pageRows.map((s) => s.id));
-    const historyWeeks = nearbyWeekKeys(weekKey, 4).slice().reverse();
-    const history = pageRows.length
+    const history = filtered.length
       ? await fetchSessions(resolved.supabase, {
-          sucursalIds: pageRows.map((s) => s.id),
+          sucursalIds: filtered.map((s) => s.id),
           kind: "semanal",
           weekKeys: historyWeeks,
           includeLines: false,
         })
       : [];
+
     return ok({
       weekKey,
       historyWeeks,
-      sucursales: pageRows,
+      sucursales: filtered,
       zonas,
-      sessions: scoped.filter((s) => pageIds.has(s.sucursalId)),
+      zonaOpciones,
+      sessions: scoped,
       history,
-      total,
-      page,
-      pageSize: PAGE_SIZE,
-      resumen: resumenFor(filtered, scoped),
+      total: filtered.length,
+      page: 1,
+      pageSize: filtered.length,
+      resumen: nacional,
     });
   } catch (err) {
     console.error(err);

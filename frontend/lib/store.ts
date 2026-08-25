@@ -1,5 +1,5 @@
 import { decodeSpreadsheetBuffer, keepConteoSpreadsheet, parseDelimitedText } from "@/lib/excel/parseInventario";
-import type { CountKind, CountLine, CountSession, InventarioMeta, Producto, SemaforoResumen, Sucursal } from "@/lib/types";
+import type { CountKind, CountLine, CountSession, InventarioMeta, Producto, SemaforoResumen, Sucursal, ZonaSemaforo } from "@/lib/types";
 
 export type InventarioPayload = {
   meta: InventarioMeta;
@@ -156,6 +156,7 @@ export async function fetchSemaforo(weekKey?: string, opts?: { zona?: string; pa
     weekKey: string;
     sucursales: Sucursal[];
     zonas: string[];
+    zonaOpciones?: ZonaSemaforo[];
     sessions: CountSession[];
     history?: CountSession[];
     historyWeeks?: string[];

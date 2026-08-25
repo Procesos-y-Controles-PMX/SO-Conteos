@@ -14,6 +14,14 @@ export type SemaforoResumen = {
   urgentesAbiertos: number;
 };
 
+export type ZonaSemaforo = {
+  id: string;
+  sucursales: number;
+  contado: number;
+  curso: number;
+  pendiente: number;
+};
+
 export type SessionUser = {
   id: string;
   rol: Role;
