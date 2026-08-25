@@ -65,7 +65,11 @@ export async function logSoAccess(input: AccessLogInput): Promise<void> {
 
   try {
     const supabase = equipoClient();
-    if (!supabase) return;
+    if (!supabase) {
+      const missing = missingEquipoAccessLogEnv();
+      console.error("[access-log] skipped, missing", missing.join(", ") || "Equipo client");
+      return;
+    }
 
     const payload = {
       USER_ID: uuidOrNull(input.userId),
