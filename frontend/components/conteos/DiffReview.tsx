@@ -16,6 +16,7 @@ export default function DiffReview({
   onComentario: (value: string) => void;
   readOnly?: boolean;
 }) {
+  const captured = session.lines.some((line) => line.fisico != null);
   const diffs = session.lines
     .map((line) => ({ line, diff: lineDiff(line) }))
     .filter((row) => row.diff != null && row.diff !== 0);
@@ -25,14 +26,20 @@ export default function DiffReview({
       <div className="neu-raised rounded-lg p-5">
         <p className="field-label">Diferencias vs SAP</p>
         <h2 className="mt-1 font-display text-xl font-semibold text-fg">
-          {diffs.length === 0 ? "Sin diferencias" : `${diffs.length} SKU con diferencia`}
+          {!captured
+            ? "Sin captura"
+            : diffs.length === 0
+              ? "Sin diferencias"
+              : `${diffs.length} SKU con diferencia`}
         </h2>
-        {session.lines.every((line) => line.teorico === 0) ? (
+        {captured && session.lines.every((line) => line.teorico === 0) ? (
           <p className="mt-2 text-sm text-fg-subtle">
             Aún no hay stock SAP (teórico 0). La diferencia de cada SKU es el físico ajustado: si contaste 12, verás +12.
           </p>
         ) : null}
-        {diffs.length === 0 ? (
+        {!captured ? (
+          <p className="mt-2 text-sm text-fg-subtle">Todavía no hay cantidades capturadas.</p>
+        ) : diffs.length === 0 ? (
           <p className="mt-2 text-sm text-fg-subtle">El físico ajustado coincide con el teórico SAP.</p>
         ) : (
           <ul className="mt-4 divide-y divide-line-subtle">

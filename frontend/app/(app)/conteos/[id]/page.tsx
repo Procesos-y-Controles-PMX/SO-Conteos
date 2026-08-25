@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
+import AdminCountReview from "@/components/conteos/AdminCountReview";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import DiffReview from "@/components/conteos/DiffReview";
 import IdentityGate from "@/components/conteos/IdentityGate";
@@ -103,6 +104,7 @@ export default function CountSessionPage() {
   }
 
   const current = scopeWeeklySession(session);
+  const adminView = user?.rol === "admin";
   const { filled, total } = countProgress(current);
   const safeIndex = Math.min(skuIndex, Math.max(0, current.lines.length - 1));
   const locked = current.status === "enviado";
@@ -144,6 +146,31 @@ export default function CountSessionPage() {
     setSession(scopeWeeklySession(submitted));
     setStep("enviado");
     toast.success("Conteo enviado.");
+  }
+
+  if (adminView) {
+    return (
+      <div>
+        <AdminCountReview session={current} onDelete={() => setConfirmDelete(true)} />
+        <ConfirmDialog
+          open={confirmDelete}
+          title="Borrar conteo"
+          body="Se elimina este envío. La sucursal podrá capturarlo de nuevo."
+          pending={deleting}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => {
+            setDeleting(true);
+            void deleteConteo(current.id)
+              .then(() => {
+                toast.success("Conteo borrado.");
+                router.push("/admin");
+              })
+              .catch((err: Error) => toast.error(err.message))
+              .finally(() => setDeleting(false));
+          }}
+        />
+      </div>
+    );
   }
 
   return (
@@ -207,33 +234,11 @@ export default function CountSessionPage() {
             onComentario={() => undefined}
             readOnly
           />
-          <button type="button" className="btn-secondary w-full" onClick={() => router.push(user?.rol === "admin" ? "/admin" : "/conteos")}>
-            {user?.rol === "admin" ? "Volver al semáforo" : "Volver a conteos"}
+          <button type="button" className="btn-secondary w-full" onClick={() => router.push("/conteos")}>
+            Volver a conteos
           </button>
-          {user?.rol === "admin" ? (
-            <button type="button" className="w-full text-sm font-semibold text-brand" onClick={() => setConfirmDelete(true)}>
-              Borrar conteo
-            </button>
-          ) : null}
         </div>
       ) : null}
-      <ConfirmDialog
-        open={confirmDelete}
-        title="Borrar conteo"
-        body="Se elimina este envío. La sucursal podrá capturarlo de nuevo."
-        pending={deleting}
-        onCancel={() => setConfirmDelete(false)}
-        onConfirm={() => {
-          setDeleting(true);
-          void deleteConteo(current.id)
-            .then(() => {
-              toast.success("Conteo borrado.");
-              router.push("/admin");
-            })
-            .catch((err: Error) => toast.error(err.message))
-            .finally(() => setDeleting(false));
-        }}
-      />
     </div>
   );
 }
