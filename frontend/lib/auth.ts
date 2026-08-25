@@ -24,6 +24,17 @@ export function logout() {
   store()?.removeItem(SESSION_KEY);
 }
 
+export function portalLoginUrl(): string | null {
+  const base = (process.env.NEXT_PUBLIC_PORTAL_URL || "").trim().replace(/\/$/, "");
+  return base ? `${base}/login?app=conteos` : null;
+}
+
+export function goToLogin() {
+  logout();
+  const url = portalLoginUrl();
+  window.location.replace(url || "/login");
+}
+
 function writeUser(user: SessionUser) {
   store()?.setItem(SESSION_KEY, JSON.stringify(user));
 }

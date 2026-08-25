@@ -4,10 +4,11 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { GridLoadingScreen } from "@promexma/ui";
 import LoginShell from "@/components/login/LoginShell";
 import SearchCombobox, { type SearchComboboxOption } from "@/components/ui/SearchCombobox";
 import { loginButtonClass, loginInputClass, loginLabelClass, loginTitleClass } from "@/components/login/loginStyles";
-import { loginAdmin, loginSucursal } from "@/lib/auth";
+import { loginAdmin, loginSucursal, portalLoginUrl } from "@/lib/auth";
 import { listSucursales } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import type { Sucursal } from "@/lib/types";
@@ -16,6 +17,7 @@ type Mode = "tienda" | "admin";
 
 export default function LoginPage() {
   const router = useRouter();
+  const portalUrl = portalLoginUrl();
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [mode, setMode] = useState<Mode>("tienda");
   const [sucursalId, setSucursalId] = useState("");
@@ -25,13 +27,22 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (portalUrl) window.location.replace(portalUrl);
+  }, [portalUrl]);
+
+  useEffect(() => {
+    if (portalUrl) return;
     void listSucursales()
       .then((rows) => {
         setSucursales(rows);
         setSucursalId((prev) => prev || rows[0]?.id || "");
       })
       .catch((err: Error) => setError(err.message));
-  }, []);
+  }, [portalUrl]);
+
+  if (portalUrl) {
+    return <GridLoadingScreen variant="dark" message="Redirigiendo al portal..." />;
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();

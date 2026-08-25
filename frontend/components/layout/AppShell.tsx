@@ -16,11 +16,11 @@ import {
 import Image from "next/image";
 import { useTheme } from "next-themes";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import ThemeToggle from "@/components/ui/ThemeToggle";
-import { logout, useAuth } from "@/lib/auth";
+import { goToLogin, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -44,7 +44,6 @@ const NAV: NavItem[] = [
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "";
-  const router = useRouter();
   const { user, loading } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { resolvedTheme } = useTheme();
@@ -53,8 +52,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [loading, user, router]);
+    if (!loading && !user) goToLogin();
+  }, [loading, user]);
 
   const items = useMemo(
     () => NAV.filter((item) => (user ? item.roles.includes(user.rol) : false)),
@@ -79,8 +78,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const isCountSession = /^\/conteos\/[^/]+$/.test(pathname);
 
   function handleLogout() {
-    logout();
-    router.replace("/login");
+    goToLogin();
   }
 
   return (

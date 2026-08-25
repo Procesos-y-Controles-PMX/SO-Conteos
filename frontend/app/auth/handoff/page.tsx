@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 import { GridLoadingScreen, InteractiveGridPattern } from "@promexma/ui";
-import { setCurrentUser } from "@/lib/auth";
+import { portalLoginUrl, setCurrentUser } from "@/lib/auth";
 import type { SessionUser } from "@/lib/types";
 
 const ENTERING = "Entrando a SO Conteos...";
@@ -50,7 +50,7 @@ function HandoffInner() {
     })();
   }, [searchParams]);
 
-  const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL;
+  const loginHref = portalLoginUrl() ?? "/login";
 
   if (error) {
     return (
@@ -65,7 +65,7 @@ function HandoffInner() {
           <AlertCircle aria-hidden="true" className="mx-auto mb-2 h-6 w-6 text-red-400" />
           <p className="text-sm text-red-200">{error}</p>
           <a
-            href={portalUrl ? `${portalUrl}/login?app=conteos` : "/login"}
+            href={loginHref}
             className="mt-4 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
           >
             Volver a iniciar sesión
