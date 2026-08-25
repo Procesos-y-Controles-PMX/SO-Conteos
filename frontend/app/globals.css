@@ -23,7 +23,7 @@
    * only from the paired light/dark shadows below.
    */
   --neu-bg: #e8ecf3;
-  --neu-light: #ffffff;
+  --neu-light: #f7f9fc;
   --neu-dark: #bcc6d4;
 
   /* Dark clay, shared by dark mode so it can't drift from Carta Porte. */
@@ -32,12 +32,12 @@
   --clay-dark-shade: #0e1116;
 
   --grid-line: rgba(150, 165, 187, 0.58);
-  --grid-emboss: #ffffff;
-  --grid-shade: rgba(172, 184, 202, 0.6);
+  --grid-emboss: rgba(255, 255, 255, 0.82);
+  --grid-shade: rgba(172, 184, 202, 0.55);
 
-  --neu-raised: -5px -5px 15px var(--neu-light), 5px 5px 15px var(--neu-dark);
-  --neu-raised-sm: -3px -3px 8px var(--neu-light), 3px 3px 8px var(--neu-dark);
-  --neu-raised-lg: -8px -8px 22px var(--neu-light), 8px 8px 22px var(--neu-dark);
+  --neu-raised: -4px -4px 12px var(--neu-light), 4px 4px 12px var(--neu-dark);
+  --neu-raised-sm: -3px -3px 7px var(--neu-light), 3px 3px 7px var(--neu-dark);
+  --neu-raised-lg: -7px -7px 18px var(--neu-light), 7px 7px 18px var(--neu-dark);
   --neu-pressed: inset -4px -4px 10px var(--neu-light), inset 4px 4px 10px var(--neu-dark);
   --neu-pressed-sm: inset -2px -2px 6px var(--neu-light), inset 2px 2px 6px var(--neu-dark);
   --shadow-card: var(--neu-raised);
