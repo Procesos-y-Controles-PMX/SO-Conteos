@@ -188,10 +188,11 @@ export async function createUrgent(input: { sucursalId: string; titulo: string; 
   return data;
 }
 
-export async function fetchSemaforo(weekKey?: string, opts?: { zona?: string; page?: number }) {
+export async function fetchSemaforo(weekKey?: string, opts?: { zona?: string; zonas?: string[]; page?: number }) {
   const q = new URLSearchParams();
   if (weekKey) q.set("weekKey", weekKey);
-  if (opts?.zona) q.set("zona", opts.zona);
+  const zonas = opts?.zonas ?? (opts?.zona ? [opts.zona] : []);
+  if (zonas.length) q.set("zona", zonas.join(","));
   if (opts?.page) q.set("page", String(opts.page));
   const suffix = q.size ? `?${q}` : "";
   return parse<{

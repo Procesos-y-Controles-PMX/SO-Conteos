@@ -27,6 +27,20 @@ function resumenFor(sucursales: Sucursal[], sessions: CountSession[]): SemaforoR
   };
 }
 
+function parseZonas(url: URL): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of url.searchParams.getAll("zona")) {
+    for (const piece of raw.split(",")) {
+      const id = piece.trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
 function zonasFor(sucursales: Sucursal[], sessions: CountSession[]): ZonaSemaforo[] {
   const names = Array.from(new Set(sucursales.map((s) => s.zona))).sort((a, b) => a.localeCompare(b, "es"));
   return names.map((id) => {
@@ -49,7 +63,7 @@ export async function GET(request: Request) {
   if ("response" in resolved) return resolved.response;
   const url = new URL(request.url);
   const weekKey = url.searchParams.get("weekKey") ?? weekKeyFromDate();
-  const zona = url.searchParams.get("zona")?.trim() || "";
+  const wanted = parseZonas(url);
   try {
     const sucursales = await fetchSucursales(resolved.supabase, true);
     const weekSessions = await fetchSessions(resolved.supabase, { weekKey, includeLines: false });
@@ -57,8 +71,10 @@ export async function GET(request: Request) {
     const zonas = zonaOpciones.map((z) => z.id);
     const historyWeeks = nearbyWeekKeys(weekKey, 4).slice().reverse();
     const nacional = resumenFor(sucursales, weekSessions);
+    const known = new Set(zonas);
+    const picked = wanted.filter((id) => known.has(id));
 
-    if (!zona) {
+    if (!picked.length) {
       return ok({
         weekKey,
         historyWeeks,
@@ -74,7 +90,8 @@ export async function GET(request: Request) {
       });
     }
 
-    const filtered = sucursales.filter((s) => s.zona === zona);
+    const allowed = new Set(picked);
+    const filtered = sucursales.filter((s) => allowed.has(s.zona));
     const scope = new Set(filtered.map((s) => s.id));
     const scoped = weekSessions.filter((s) => scope.has(s.sucursalId));
     const history = filtered.length
@@ -97,7 +114,7 @@ export async function GET(request: Request) {
       total: filtered.length,
       page: 1,
       pageSize: filtered.length,
-      resumen: nacional,
+      resumen: resumenFor(filtered, scoped),
     });
   } catch (err) {
     console.error(err);
