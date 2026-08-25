@@ -1,5 +1,4 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
-import { fetchSession } from "@/lib/db/queries";
 import type { CountLine } from "@/lib/types";
 
 type Params = { params: Promise<{ id: string }> };
@@ -23,8 +22,7 @@ export async function PATCH(request: Request, { params }: Params) {
       .eq("sku", body.sku);
     if (error) throw error;
     await resolved.supabase.from("cnt_conteos").update({ status: "en_progreso" }).eq("id", id).eq("status", "pendiente");
-    const session = await fetchSession(resolved.supabase, id);
-    return ok({ session });
+    return ok({ saved: true });
   } catch (err) {
     console.error(err);
     return fail("No se pudo guardar la línea.", 500);

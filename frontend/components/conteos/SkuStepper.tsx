@@ -124,7 +124,7 @@ export default function SkuStepper({
     <div className="mx-auto flex w-full max-w-lg flex-col pb-28 lg:pb-8">
       <div className="mb-4">
         <p className="field-label">
-          {session.kind === "semanal" ? weekLabel(session.weekKey) : "Urgente"} · {index + 1} de {total}
+          {session.kind === "semanal" ? weekLabel(session.weekKey) : "Urgente"} · producto {index + 1} de {total}
         </p>
         <div className="mt-2 flex items-center gap-3">
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted-strong">
@@ -134,7 +134,7 @@ export default function SkuStepper({
             />
           </div>
           <p className="shrink-0 font-mono text-xs tabular-nums text-fg-muted">
-            {counted}/{total}
+            {counted}/{total} capturados
           </p>
         </div>
         <label className="mt-3 block">

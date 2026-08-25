@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -16,6 +16,14 @@ import { weekLabel } from "@/lib/week";
 
 type Step = "identidad" | "conteo" | "revision" | "enviado";
 
+function saveErrorMessage(err: unknown) {
+  const msg = err instanceof Error ? err.message : "";
+  if (!msg || msg === "Load failed" || msg === "Failed to fetch") {
+    return "No se pudo guardar. Revisa la conexión.";
+  }
+  return msg;
+}
+
 export default function CountSessionPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -28,6 +36,46 @@ export default function CountSessionPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const saveTimer = useRef<number | null>(null);
+  const pendingRef = useRef<Record<string, Partial<CountLine>>>({});
+  const sessionIdRef = useRef(params.id);
+  const lastToastAt = useRef(0);
+  sessionIdRef.current = params.id;
+
+  const flushSaves = useCallback(async () => {
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const batch = pendingRef.current;
+    const skus = Object.keys(batch);
+    if (skus.length === 0) return;
+    pendingRef.current = {};
+    const id = sessionIdRef.current;
+    const results = await Promise.allSettled(skus.map((sku) => patchLine(id, sku, batch[sku])));
+    let failed = false;
+    results.forEach((result, i) => {
+      if (result.status !== "rejected") return;
+      const sku = skus[i];
+      pendingRef.current[sku] = { ...batch[sku], ...pendingRef.current[sku] };
+      failed = true;
+    });
+    if (failed) {
+      const now = Date.now();
+      if (now - lastToastAt.current > 4000) {
+        lastToastAt.current = now;
+        const err = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
+        toast.error(saveErrorMessage(err.reason));
+      }
+    }
+  }, []);
+
+  function queueSave(sku: string, patch: Partial<CountLine>) {
+    pendingRef.current[sku] = { ...pendingRef.current[sku], ...patch };
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      void flushSaves();
+    }, 400);
+  }
 
   useEffect(() => {
     void getSession(params.id)
@@ -40,6 +88,12 @@ export default function CountSessionPage() {
       })
       .catch(() => setMissing(true));
   }, [params.id]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    };
+  }, []);
 
   if (missing) return <p className="text-sm text-fg-subtle">No se encontró este conteo.</p>;
   if (!session) return <p className="text-sm text-fg-subtle">Cargando…</p>;
@@ -72,13 +126,11 @@ export default function CountSessionPage() {
         lines: prev.lines.map((line) => (line.sku === sku ? { ...line, ...patch } : line)),
       };
     });
-    if (saveTimer.current) window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => {
-      void patchLine(current.id, sku, patch).then((next) => setSession(scopeWeeklySession(next))).catch((err: Error) => toast.error(err.message));
-    }, 280);
+    queueSave(sku, patch);
   }
 
   async function handleSubmit() {
+    await flushSaves();
     if (filled < total) {
       toast.error(`Faltan ${total - filled} SKU por capturar.`);
       setStep("conteo");
@@ -118,7 +170,9 @@ export default function CountSessionPage() {
           index={safeIndex}
           onIndex={setSkuIndex}
           onPatch={handlePatch}
-          onFinish={() => setStep("revision")}
+          onFinish={() => {
+            void flushSaves().finally(() => setStep("revision"));
+          }}
         />
       ) : null}
 

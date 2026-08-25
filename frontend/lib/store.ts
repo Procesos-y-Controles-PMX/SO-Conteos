@@ -112,14 +112,13 @@ export async function patchSession(id: string, patch: Partial<CountSession>) {
 }
 
 export async function patchLine(sessionId: string, sku: string, patch: Partial<CountLine>) {
-  const data = await parse<{ session: CountSession }>(
+  await parse<{ saved?: boolean }>(
     await fetch(`/api/conteos/${sessionId}/lineas`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sku, patch }),
     }),
   );
-  return data.session;
 }
 
 export async function submitSession(
