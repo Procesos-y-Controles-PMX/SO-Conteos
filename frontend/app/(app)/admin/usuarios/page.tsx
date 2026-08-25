@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
+import SelectDropdown from "@/components/ui/SelectDropdown";
 import UsuarioFormModal from "@/components/usuarios/UsuarioFormModal";
 import { isMajorAdmin } from "@/lib/access";
 import { useAuth } from "@/lib/auth";
@@ -21,6 +22,11 @@ function createdLabel(iso?: string) {
   if (!iso) return "—";
   return formatDateTime(iso);
 }
+
+const APP_FILTER_OPTIONS = [
+  { id: "todas", label: "Todas" },
+  ...SO_ACCOUNT_APPS.map((app) => ({ id: app, label: SO_ACCOUNT_APP_LABELS[app] })),
+];
 
 export default function UsuariosPage() {
   const { user } = useAuth();
@@ -158,20 +164,13 @@ export default function UsuariosPage() {
           />
         </label>
         {showCreated ? (
-          <label className="block text-[10px] font-bold uppercase tracking-wider text-fg-faint">
-            App
-            <select
+          <label className="block">
+            <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-fg-faint">App</span>
+            <SelectDropdown
               value={cuentaApp}
-              onChange={(event) => setCuentaApp(event.target.value as "todas" | SoAccountApp)}
-              className="input-field mt-1.5"
-            >
-              <option value="todas">Todas</option>
-              {SO_ACCOUNT_APPS.map((app) => (
-                <option key={app} value={app}>
-                  {SO_ACCOUNT_APP_LABELS[app]}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => setCuentaApp(id as "todas" | SoAccountApp)}
+              options={APP_FILTER_OPTIONS}
+            />
           </label>
         ) : null}
       </div>
