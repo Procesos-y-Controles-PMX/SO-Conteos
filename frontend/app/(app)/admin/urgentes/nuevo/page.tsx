@@ -61,44 +61,48 @@ export default function NuevoUrgentePage() {
         title="Nuevo conteo urgente"
         subtitle="Elige sucursal y productos. La tienda verá semáforo en rojo hasta enviarlo."
       />
-      <form onSubmit={(e) => void onSubmit(e)} className="mx-auto max-w-2xl space-y-5">
-        <label className="block">
-          <span className="field-label mb-1.5 block">Sucursal</span>
-          <SearchCombobox
-            minChars={0}
-            clearOnType={false}
-            placeholder="Buscar sucursal…"
-            value={
-              sucursales.find((s) => s.id === sucursalId)
-                ? {
-                    id: sucursalId,
-                    label: sucursales.find((s) => s.id === sucursalId)!.nombre,
-                    sublabel: sucursales.find((s) => s.id === sucursalId)!.zona,
-                  }
-                : null
-            }
-            onChange={(opt) => setSucursalId(opt?.id ?? "")}
-            onSearch={(query) => {
-              const q = query.trim().toLowerCase();
-              return sucursales
-                .filter((s) => !q || `${s.nombre} ${s.zona}`.toLowerCase().includes(q))
-                .slice(0, 40)
-                .map((s) => ({ id: s.id, label: s.nombre, sublabel: s.zona }));
-            }}
-          />
-        </label>
-        <label className="block">
-          <span className="field-label mb-1.5 block">Título</span>
-          <input
-            className="input-field"
-            placeholder="Urgente · varilla"
-            value={titulo}
-            onChange={(e) => setTitulo(e.target.value)}
-          />
-        </label>
+      <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
+        <div className="grid gap-5 sm:grid-cols-2 xl:max-w-3xl">
+          <label className="block">
+            <span className="field-label mb-1.5 block">Sucursal</span>
+            <SearchCombobox
+              minChars={0}
+              clearOnType={false}
+              placeholder="Buscar sucursal…"
+              value={
+                sucursales.find((s) => s.id === sucursalId)
+                  ? {
+                      id: sucursalId,
+                      label: sucursales.find((s) => s.id === sucursalId)!.nombre,
+                      sublabel: sucursales.find((s) => s.id === sucursalId)!.zona,
+                    }
+                  : null
+              }
+              onChange={(opt) => setSucursalId(opt?.id ?? "")}
+              onSearch={(query) => {
+                const q = query.trim().toLowerCase();
+                return sucursales
+                  .filter((s) => !q || `${s.nombre} ${s.zona}`.toLowerCase().includes(q))
+                  .slice(0, 40)
+                  .map((s) => ({ id: s.id, label: s.nombre, sublabel: s.zona }));
+              }}
+            />
+          </label>
+          <label className="block">
+            <span className="field-label mb-1.5 block">Título</span>
+            <input
+              className="input-field"
+              placeholder="Urgente · varilla"
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+            />
+          </label>
+        </div>
         <div>
-          <p className="field-label mb-2">Productos</p>
-          <ul className="grid gap-2 sm:grid-cols-2">
+          <p className="field-label mb-2">
+            Productos{skus.length ? ` · ${skus.length}` : ""}
+          </p>
+          <ul className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
             {productos.map((p) => {
               const on = skus.includes(p.sku);
               return (
@@ -106,17 +110,20 @@ export default function NuevoUrgentePage() {
                   <button
                     type="button"
                     onClick={() => toggle(p.sku)}
-                    className={cn("w-full rounded-sm px-3 py-3 text-left", on ? "neu-nav-active text-white" : "neu-button text-fg")}
+                    className={cn(
+                      "flex h-full w-full flex-col rounded-sm px-3 py-2.5 text-left",
+                      on ? "neu-nav-active text-white" : "neu-button text-fg",
+                    )}
                   >
                     <span className="block font-mono text-[11px] opacity-80">{p.sku}</span>
-                    <span className="text-sm font-semibold">{p.nombre}</span>
+                    <span className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug">{p.nombre}</span>
                   </button>
                 </li>
               );
             })}
           </ul>
         </div>
-        <button type="submit" className="btn-primary w-full">
+        <button type="submit" className="btn-primary w-full sm:w-auto sm:min-w-64">
           Crear y avisar por correo
         </button>
       </form>
