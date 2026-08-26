@@ -36,7 +36,7 @@ function CountAction({
   compact?: boolean;
 }) {
   return (
-    <div className={cn("flex min-w-0 items-center gap-2", compact && "justify-end")}>
+    <div className={cn("flex min-w-0 items-center gap-2", compact && "w-full justify-end")}>
       <Link
         href={href}
         className={cn(
@@ -72,9 +72,6 @@ function urgentesCopy(urgentes: CountSession[]) {
   if (urgentes.length === 0) return "ninguno";
   return `${urgentes.filter((u) => u.status === "enviado").length}/${urgentes.length} enviados`;
 }
-
-const ROW_GRID =
-  "grid grid-cols-[minmax(11rem,1.5fr)_6.75rem_7rem_minmax(4.5rem,0.85fr)_5.25rem_auto] items-center gap-x-3";
 
 function SucursalCard({
   sucursal,
@@ -158,20 +155,29 @@ function SucursalRow({
   onDelete: (session: CountSession, nombre: string) => void;
 }) {
   const status = sessionSemaforo(weekly);
+  const cell = "px-3 py-2.5 align-middle";
 
   return (
-    <article className="relative">
-      <div className={cn("absolute inset-y-0 left-0 w-1", statusBarClass(status))} aria-hidden />
-        <div className={cn(ROW_GRID, "py-2.5 pl-4 pr-3 transition-colors hover:bg-[color-mix(in_srgb,var(--fg)_4%,transparent)]")}>
-        <div className="min-w-0">
+    <>
+      <tr className="border-t border-line-subtle transition-colors hover:bg-[color-mix(in_srgb,var(--fg)_4%,transparent)]">
+        <td className={cn(cell, "relative min-w-0 pl-4")}>
+          <span className={cn("absolute inset-y-0 left-0 w-1", statusBarClass(status))} aria-hidden />
           <p className="truncate font-semibold text-fg">{sucursal.nombre}</p>
           <p className="truncate text-[11px] text-fg-faint">{sucursal.gerenteNombre || "Gerente de tienda"}</p>
-        </div>
-        <SemaforoDot value={status} size="sm" />
-        <WeekHistory weeks={historyWeeks} doneByWeek={doneByWeek} compact />
-        <p className="truncate text-xs text-fg-subtle">{weekly?.counterName ?? "—"}</p>
-        <p className="truncate text-xs text-fg-subtle">{urgentesCopy(urgentes)}</p>
-        <div className="flex justify-end">
+        </td>
+        <td className={cell}>
+          <SemaforoDot value={status} size="sm" />
+        </td>
+        <td className={cell}>
+          <WeekHistory weeks={historyWeeks} doneByWeek={doneByWeek} compact />
+        </td>
+        <td className={cn(cell, "max-w-0 overflow-hidden text-xs text-fg-subtle")}>
+          <span className="block truncate">{weekly?.counterName ?? "—"}</span>
+        </td>
+        <td className={cn(cell, "max-w-0 overflow-hidden text-xs text-fg-subtle")}>
+          <span className="block truncate">{urgentesCopy(urgentes)}</span>
+        </td>
+        <td className={cn(cell, "text-right")}>
           {weekly ? (
             <CountAction
               compact
@@ -182,22 +188,26 @@ function SucursalRow({
           ) : (
             <span className="text-xs text-fg-faint">—</span>
           )}
-        </div>
-      </div>
+        </td>
+      </tr>
       {urgentes.length > 0 ? (
-        <div className="flex flex-wrap justify-end gap-2 border-t border-line-subtle py-2 pl-4 pr-3">
-          {urgentes.map((u) => (
-            <CountAction
-              key={u.id}
-              compact
-              href={`/conteos/${u.id}`}
-              label={urgenteLabel(u)}
-              onDelete={() => onDelete(u, sucursal.nombre)}
-            />
-          ))}
-        </div>
+        <tr className="border-t border-line-subtle">
+          <td colSpan={6} className="px-3 py-2 pl-4">
+            <div className="flex flex-wrap justify-end gap-2">
+              {urgentes.map((u) => (
+                <CountAction
+                  key={u.id}
+                  compact
+                  href={`/conteos/${u.id}`}
+                  label={urgenteLabel(u)}
+                  onDelete={() => onDelete(u, sucursal.nombre)}
+                />
+              ))}
+            </div>
+          </td>
+        </tr>
       ) : null}
-    </article>
+    </>
   );
 }
 
@@ -226,31 +236,57 @@ export default function SemaforoSucursalGroup({
         ))}
       </div>
       <div className="neu-raised hidden overflow-hidden rounded-lg lg:block">
-        <div className={cn(ROW_GRID, "items-end border-b border-line-subtle py-2 pl-4 pr-3")}>
-          <p className="field-label">Sucursal</p>
-          <p className="field-label">Estado</p>
-          <div>
-            <p className="field-label">4 sem</p>
-            {historyWeeks.length > 0 ? (
-              <p className="mt-0.5 font-mono text-[10px] font-semibold tabular-nums tracking-wide text-fg-faint">
-                {historyWeeks.map((key) => Number(key.split("-W")[1])).join("  ")}
-              </p>
-            ) : null}
-          </div>
-          <p className="field-label">Semanal</p>
-          <p className="field-label">Urgentes</p>
-          <p className="field-label text-right">Acciones</p>
-        </div>
-        <div className="divide-y divide-line-subtle">
-          {rows.map((row) => (
-            <SucursalRow
-              key={row.sucursal.id}
-              {...row}
-              historyWeeks={historyWeeks}
-              onDelete={onDelete}
-            />
-          ))}
-        </div>
+        <table className="w-full table-fixed text-left">
+          <colgroup>
+            <col className="w-[24%]" />
+            <col className="w-[12%]" />
+            <col className="w-[12%]" />
+            <col className="w-[16%]" />
+            <col className="w-[12%]" />
+            <col className="w-[24%]" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th className="px-3 py-2.5 pl-4 align-bottom">
+                <span className="field-label">Sucursal</span>
+              </th>
+              <th className="px-3 py-2.5 align-bottom">
+                <span className="field-label">Estado</span>
+              </th>
+              <th className="px-3 py-2.5 align-bottom">
+                <p className="field-label">4 sem</p>
+                {historyWeeks.length > 0 ? (
+                  <div className="mt-0.5 grid w-[5.75rem] grid-cols-4 justify-items-center">
+                    {historyWeeks.map((key) => (
+                      <span key={key} className="font-mono text-[10px] font-semibold tabular-nums text-fg-faint">
+                        {Number(key.split("-W")[1])}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </th>
+              <th className="px-3 py-2.5 align-bottom">
+                <span className="field-label">Semanal</span>
+              </th>
+              <th className="px-3 py-2.5 align-bottom">
+                <span className="field-label">Urgentes</span>
+              </th>
+              <th className="px-3 py-2.5 pr-3 text-right align-bottom">
+                <span className="field-label">Acciones</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <SucursalRow
+                key={row.sucursal.id}
+                {...row}
+                historyWeeks={historyWeeks}
+                onDelete={onDelete}
+              />
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );

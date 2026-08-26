@@ -33,7 +33,7 @@ export default function WeekHistory({
 
   if (compact) {
     return (
-      <div className="flex items-center gap-1" aria-label="Últimas 4 semanas">
+      <div className="grid w-[5.75rem] grid-cols-4 justify-items-center" aria-label="Últimas 4 semanas">
         {weeks.map((key) => (
           <WeekMark key={key} weekKey={key} done={Boolean(doneByWeek[key])} />
         ))}
