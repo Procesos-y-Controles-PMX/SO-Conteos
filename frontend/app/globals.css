@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@promexma/ui/clay.css";
 @source "../node_modules/@promexma/ui/src";
 
 /* Class-based dark mode driven by next-themes (`attribute="class"`). */
