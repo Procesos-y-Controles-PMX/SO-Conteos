@@ -1,17 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import SemaforoDot from "@/components/conteos/SemaforoDot";
+import SemaforoSucursalGroup from "@/components/conteos/SemaforoSucursalGroup";
 import WeekBoard from "@/components/conteos/WeekBoard";
-import WeekHistory from "@/components/conteos/WeekHistory";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
 import { deleteConteo, fetchSemaforo } from "@/lib/store";
 import {
-  sessionSemaforo,
   type CountSession,
   type Semaforo,
   type SemaforoResumen,
@@ -47,34 +45,6 @@ function zonaListLabel(zonas: string[]) {
   if (zonas.length === 1) return zonas[0]!;
   if (zonas.length === 2) return `${zonas[0]} y ${zonas[1]}`;
   return `${zonas.length} zonas`;
-}
-
-function CountAction({
-  href,
-  label,
-  onDelete,
-}: {
-  href: string;
-  label: string;
-  onDelete: () => void;
-}) {
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <Link
-        href={href}
-        className="neu-tray min-w-0 flex-1 truncate rounded-sm px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-fg"
-      >
-        {label}
-      </Link>
-      <button
-        type="button"
-        className="neu-button shrink-0 rounded-sm px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-brand"
-        onClick={onDelete}
-      >
-        Borrar
-      </button>
-    </div>
-  );
 }
 
 export default function AdminSemaforoPage() {
@@ -268,71 +238,13 @@ export default function AdminSemaforoPage() {
             <p className="text-sm text-fg-subtle">No hay sucursales en estas zonas.</p>
           ) : (
             groups.map((group) => (
-              <section key={group.id}>
-                <h2 className="mb-3 font-display text-lg font-semibold text-fg">{group.id}</h2>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {group.rows.map(({ sucursal, weekly, urgentes, doneByWeek }) => {
-                    const status = sessionSemaforo(weekly);
-                    return (
-                      <article key={sucursal.id} className="neu-raised relative rounded-lg">
-                        <div
-                          className={
-                            status === "verde"
-                              ? "absolute inset-y-0 right-0 w-1.5 overflow-hidden rounded-r-lg bg-emerald-500"
-                              : status === "ambar"
-                                ? "absolute inset-y-0 right-0 w-1.5 overflow-hidden rounded-r-lg bg-amber-400"
-                                : "absolute inset-y-0 right-0 w-1.5 overflow-hidden rounded-r-lg bg-brand"
-                          }
-                          aria-hidden
-                        />
-                        <div className="p-4 pr-5">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="font-semibold text-fg">{sucursal.nombre}</p>
-                              <p className="text-[11px] text-fg-faint">{sucursal.gerenteNombre || "Gerente de tienda"}</p>
-                            </div>
-                            <SemaforoDot value={status} />
-                          </div>
-                          <div className="mt-3 flex items-end justify-between gap-3">
-                            <dl className="min-w-0 flex-1 space-y-1 text-xs text-fg-subtle">
-                              <div className="flex justify-between gap-3">
-                                <dt>Semanal</dt>
-                                <dd className="truncate text-right">{weekly?.counterName ?? "—"}</dd>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <dt>Urgentes</dt>
-                                <dd>
-                                  {urgentes.length === 0
-                                    ? "ninguno"
-                                    : `${urgentes.filter((u) => u.status === "enviado").length}/${urgentes.length} enviados`}
-                                </dd>
-                              </div>
-                            </dl>
-                            <WeekHistory weeks={historyWeeks} doneByWeek={doneByWeek} />
-                          </div>
-                          <div className="mt-3 space-y-2">
-                            {weekly ? (
-                              <CountAction
-                                href={`/conteos/${weekly.id}`}
-                                label={weekly.status === "enviado" ? "Ver enviado" : "Ver semanal"}
-                                onDelete={() => setPending({ session: weekly, nombre: sucursal.nombre })}
-                              />
-                            ) : null}
-                            {urgentes.map((u) => (
-                              <CountAction
-                                key={u.id}
-                                href={`/conteos/${u.id}`}
-                                label={u.titulo.replace("Urgente · ", "")}
-                                onDelete={() => setPending({ session: u, nombre: sucursal.nombre })}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              </section>
+              <SemaforoSucursalGroup
+                key={group.id}
+                zona={group.id}
+                rows={group.rows}
+                historyWeeks={historyWeeks}
+                onDelete={(session, nombre) => setPending({ session, nombre })}
+              />
             ))
           )}
         </div>
