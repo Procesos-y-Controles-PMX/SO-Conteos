@@ -70,8 +70,20 @@ function urgenteLabel(urgente: CountSession) {
 }
 
 function urgentesCopy(urgentes: CountSession[]) {
-  if (urgentes.length === 0) return "ninguno";
+  if (urgentes.length === 0) return "Ninguno";
   return `${urgentes.filter((u) => u.status === "enviado").length}/${urgentes.length} enviados`;
+}
+
+function SucursalName({ sucursal }: { sucursal: Sucursal }) {
+  return (
+    <div className="min-w-0">
+      <p className="truncate font-semibold text-fg">{sucursal.nombre}</p>
+      <p className="truncate text-[11px] text-fg-faint">
+        {sucursal.gerenteNombre || "Gerente de tienda"}
+        {!sucursal.hasAccount ? <span className="font-semibold text-brand"> · Sin usuario</span> : null}
+      </p>
+    </div>
+  );
 }
 
 const ROW_H = 54;
@@ -193,10 +205,7 @@ function SucursalCard({
       />
       <div className="p-4 pr-5">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="font-semibold text-fg">{sucursal.nombre}</p>
-            <p className="text-[11px] text-fg-faint">{sucursal.gerenteNombre || "Gerente de tienda"}</p>
-          </div>
+          <SucursalName sucursal={sucursal} />
           <SemaforoDot value={status} />
         </div>
         <div className="mt-3 flex items-end justify-between gap-3">
@@ -262,8 +271,7 @@ function SucursalRow({
       >
         <td className={cn(cell, "relative min-w-0 pl-4")}>
           <span className={cn("absolute inset-y-0 left-0 w-1", statusBarClass(status))} aria-hidden />
-          <p className="truncate font-semibold text-fg">{sucursal.nombre}</p>
-          <p className="truncate text-[11px] text-fg-faint">{sucursal.gerenteNombre || "Gerente de tienda"}</p>
+          <SucursalName sucursal={sucursal} />
         </td>
         <td className={cell}>
           <SemaforoDot value={status} size="sm" />
