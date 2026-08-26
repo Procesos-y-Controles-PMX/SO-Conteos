@@ -5,7 +5,7 @@ import { ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import SemaforoDot from "@/components/conteos/SemaforoDot";
 import SemaforoSucursalGroup from "@/components/conteos/SemaforoSucursalGroup";
-import WeekBoard from "@/components/conteos/WeekBoard";
+import WeekBoard, { WeekBoardSkeleton } from "@/components/conteos/WeekBoard";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
 import { deleteConteo, fetchSemaforo } from "@/lib/store";
@@ -73,6 +73,12 @@ export default function AdminSemaforoPage() {
   useEffect(() => {
     if (!ready) return;
     setLoading(true);
+    if (zonas.length) {
+      setSucursales([]);
+      setSessions([]);
+      setHistory([]);
+      setResumen(null);
+    }
     void fetchSemaforo(weekKey, zonas.length ? { zonas } : undefined)
       .then((data) => {
         setSucursales(data.sucursales);
@@ -167,7 +173,7 @@ export default function AdminSemaforoPage() {
         }
       />
       {error ? <p className="mb-4 text-sm text-brand">{error}</p> : null}
-      {resumen ? <WeekBoard resumen={resumen} /> : null}
+      {resumen ? <WeekBoard resumen={resumen} /> : viewing ? <WeekBoardSkeleton /> : null}
       <div className="mb-6 flex flex-wrap gap-4 text-xs">
         {ORDER.map((value) => (
           <SemaforoDot key={value} value={value} />
@@ -233,8 +239,22 @@ export default function AdminSemaforoPage() {
         </section>
       ) : (
         <div className="space-y-8">
-          {loading ? <p className="text-sm text-fg-subtle">Cargando sucursales…</p> : null}
-          {!loading && rows.length === 0 ? (
+          {loading ? (
+            <>
+              <p className="sr-only">Cargando sucursales…</p>
+              {zonas.map((id) => (
+                <SemaforoSucursalGroup
+                  key={id}
+                  zona={id}
+                  rows={[]}
+                  historyWeeks={historyWeeks}
+                  loading
+                  placeholderCount={zonaOpciones.find((item) => item.id === id)?.sucursales ?? 8}
+                  onDelete={(session, nombre) => setPending({ session, nombre })}
+                />
+              ))}
+            </>
+          ) : rows.length === 0 ? (
             <p className="text-sm text-fg-subtle">No hay sucursales en estas zonas.</p>
           ) : (
             groups.map((group) => (

@@ -58,3 +58,32 @@ function Stat({
     </div>
   );
 }
+
+export function WeekBoardSkeleton() {
+  return (
+    <div className="neu-raised mb-6 rounded-lg p-5" aria-hidden>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="field-label">Semana</p>
+        <div className="h-4 w-10 rounded-sm bg-muted-strong" />
+      </div>
+      <div className="relative mt-3 h-2.5 overflow-hidden rounded-full bg-muted-strong">
+        <div
+          className="pointer-events-none absolute inset-0 overflow-hidden motion-reduce:hidden"
+        >
+          <div
+            className="h-full w-[45%] bg-[linear-gradient(90deg,transparent_0%,var(--steel-tint)_50%,transparent_100%)]"
+            style={{ animation: "so-skeleton-sweep 1600ms linear infinite" }}
+          />
+        </div>
+      </div>
+      <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {["Contado", "En curso", "Pendiente", "Urgentes"].map((label) => (
+          <div key={label}>
+            <dt className="field-label">{label}</dt>
+            <dd className="mt-1 h-8 w-10 rounded-sm bg-muted-strong" />
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
