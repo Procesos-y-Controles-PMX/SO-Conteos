@@ -99,7 +99,7 @@
   --grid-line: rgba(0, 0, 0, 0.5);
   --grid-emboss: rgba(255, 255, 255, 0.085);
   --grid-shade: rgba(0, 0, 0, 0.4);
-}}
+}
 
 @theme inline {
   --color-brand: var(--brand);
