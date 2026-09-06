@@ -118,19 +118,35 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        <nav className="sidebar-scroll flex-1 space-y-1.5 px-3 py-4">
+        <nav
+          className={cn(
+            "sidebar-scroll flex-1 py-4",
+            sidebarCollapsed ? "flex flex-col items-center gap-2.5 px-2" : "flex flex-col gap-2 px-2",
+          )}
+        >
           {items.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               title={sidebarCollapsed ? item.label : undefined}
               className={cn(
-                "relative flex items-center gap-3 rounded-sm px-3 py-2.5 text-[13px] font-medium transition-all duration-200",
-                sidebarCollapsed && "justify-center",
-                isActive(item.href) ? "neu-nav-active text-white" : "neu-nav-idle text-fg-muted hover:text-fg",
+                "relative flex items-center rounded-sm text-sm font-medium",
+                sidebarCollapsed
+                  ? "h-11 w-11 justify-center"
+                  : "gap-3 px-3 py-2.5",
+                isActive(item.href)
+                  ? "neu-nav-active text-white"
+                  : "neu-nav-idle text-fg-muted hover:text-fg",
               )}
             >
-              <span className="shrink-0">{item.icon}</span>
+              <span
+                className={cn(
+                  "relative shrink-0",
+                  isActive(item.href) ? "text-white" : "text-fg-subtle",
+                )}
+              >
+                {item.icon}
+              </span>
               {!sidebarCollapsed ? <span className="truncate">{item.label}</span> : null}
             </Link>
           ))}

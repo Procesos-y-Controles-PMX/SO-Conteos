@@ -233,16 +233,23 @@ body {
 
 .neu-nav-active {
   background: linear-gradient(145deg, var(--brand), var(--brand-active));
-  box-shadow: var(--neu-raised-sm);
+  box-shadow: var(--neu-pressed-sm);
 }
 
 .neu-nav-idle {
   background: var(--neu-bg);
-  box-shadow: none;
+  box-shadow: var(--neu-raised-sm);
+  transition:
+    box-shadow var(--motion-quick, 180ms) var(--motion-ease, ease),
+    color var(--motion-quick, 180ms) var(--motion-ease, ease);
 }
 
 .neu-nav-idle:hover {
-  box-shadow: var(--neu-raised-sm);
+  box-shadow: var(--neu-raised);
+}
+
+.neu-nav-idle:active {
+  box-shadow: var(--neu-pressed-sm);
 }
 
 .neu-popover {
