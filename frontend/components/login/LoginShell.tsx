@@ -66,6 +66,8 @@ export default function LoginShell({
         <NoiseField
           key={mounted ? resolvedTheme : "dark"}
           className="absolute inset-0"
+          color={isDark ? [255, 255, 255] : [52, 80, 122]}
+          maxOpacity={isDark ? 0.5 : 0.32}
         />
       </div>
 

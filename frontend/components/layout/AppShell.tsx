@@ -184,6 +184,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <NoiseField
             key={mounted ? resolvedTheme : "light"}
             className="absolute inset-0"
+            color={resolvedTheme === "light" ? [52, 80, 122] : [255, 255, 255]}
+            maxOpacity={resolvedTheme === "light" ? 0.32 : 0.5}
           />
         </div>
         <header className="app-safe-x z-30 flex shrink-0 items-center justify-between gap-2 bg-transparent py-3 lg:hidden">
