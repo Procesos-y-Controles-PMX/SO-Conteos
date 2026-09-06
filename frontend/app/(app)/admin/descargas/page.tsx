@@ -169,7 +169,7 @@ export default function DescargasPage() {
                     <td className="px-4 py-3 text-right">
                       <button
                         type="button"
-                        className="text-xs font-semibold text-brand"
+                        className="btn-danger min-h-8 px-2 py-1 text-xs"
                         onClick={() => setPendingId(session.id)}
                       >
                         Borrar

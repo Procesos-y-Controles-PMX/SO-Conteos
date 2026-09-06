@@ -50,7 +50,7 @@ function CountAction({
       <button
         type="button"
         className={cn(
-          "neu-button shrink-0 rounded-sm text-[10px] font-semibold uppercase tracking-wide text-brand",
+          "btn-danger shrink-0 rounded-sm text-[10px] font-semibold uppercase tracking-wide",
           compact ? "px-2.5 py-1.5" : "px-3 py-2",
         )}
         onClick={onDelete}
