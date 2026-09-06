@@ -64,8 +64,9 @@
 }
 
 .dark {
+  /* Pure black behind the ambient NoiseField. Panels keep --neu-bg slate. */
   color-scheme: dark;
-  --background: #1b2027;
+  --background: #000000;
   --foreground: #e6edf3;
   --surface: #1b2027;
   --steel-tint: rgba(120, 150, 200, 0.16);
@@ -93,12 +94,12 @@
   --line: rgba(255, 255, 255, 0.06);
   --line-subtle: rgba(255, 255, 255, 0.04);
   --line-strong: rgba(255, 255, 255, 0.1);
-  --canvas: var(--neu-bg);
+  --canvas: #000000;
   --console-bg: var(--neu-bg);
   --grid-line: rgba(0, 0, 0, 0.5);
   --grid-emboss: rgba(255, 255, 255, 0.085);
   --grid-shade: rgba(0, 0, 0, 0.4);
-}
+}}
 
 @theme inline {
   --color-brand: var(--brand);
