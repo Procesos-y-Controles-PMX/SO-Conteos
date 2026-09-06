@@ -1,6 +1,6 @@
 "use client";
 
-import { NoiseField } from "@promexma/ui";
+import { GridThemeToggle, NoiseField, ThemeToggle } from "@promexma/ui";
 import {
   Bell,
   ClipboardList,
@@ -19,7 +19,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
-import ThemeToggle from "@/components/ui/ThemeToggle";
 import { isConteosAdmin, sessionRoleLabel } from "@/lib/access";
 import { goToLogin, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -155,7 +154,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <div className="space-y-2 p-3">
           {sidebarCollapsed ? (
             <div className="flex flex-col items-center gap-2">
-              <ThemeToggle />
+              <GridThemeToggle compact />
               <button
                 type="button"
                 onClick={handleLogout}
@@ -167,6 +166,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </div>
           ) : (
             <>
+              <GridThemeToggle />
               <div className="neu-tray px-3 py-2">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-fg-faint">Sesión</p>
                 <p className="mt-0.5 truncate text-xs font-semibold text-fg">{user.nombre}</p>
@@ -174,17 +174,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   {sessionRoleLabel(user)}
                 </p>
               </div>
-              <div className="flex items-center justify-between gap-2">
-                <ThemeToggle />
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="neu-button flex flex-1 items-center justify-center gap-2 rounded-sm px-3 py-2 text-[12px] font-medium text-fg-muted hover:text-fg"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Salir
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="neu-button flex w-full items-center justify-center gap-2 rounded-sm px-3 py-2 text-[12px] font-medium text-fg-muted hover:text-fg"
+              >
+                <LogOut className="h-4 w-4" />
+                Salir
+              </button>
             </>
           )}
         </div>

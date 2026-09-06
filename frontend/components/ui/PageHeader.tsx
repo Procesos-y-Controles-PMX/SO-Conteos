@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import ThemeToggle from "@/components/ui/ThemeToggle";
+import { ThemeToggle } from "@promexma/ui";
 
 interface Props {
   eyebrow?: string;

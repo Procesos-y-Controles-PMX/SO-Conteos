@@ -1,10 +1,9 @@
 "use client";
 
-import { NoiseField } from "@promexma/ui";
+import { NoiseField, ThemeToggle } from "@promexma/ui";
 import { useTheme } from "next-themes";
 import { useEffect, useState, type ReactNode } from "react";
 import PromexmaLogotipo from "@/components/login/PromexmaLogotipo";
-import ThemeToggle from "@/components/ui/ThemeToggle";
 
 const CLAY_LIGHT = "#e8ecf3";
 const CLAY_DARK = "#1b2027";
