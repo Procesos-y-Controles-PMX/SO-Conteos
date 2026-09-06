@@ -1,6 +1,6 @@
 "use client";
 
-import { InteractiveGridPattern } from "@promexma/ui";
+import { NoiseField } from "@promexma/ui";
 import { useTheme } from "next-themes";
 import { useEffect, useState, type ReactNode } from "react";
 import PromexmaLogotipo from "@/components/login/PromexmaLogotipo";
@@ -63,15 +63,9 @@ export default function LoginShell({
   return (
     <div className="app-canvas relative min-h-dvh overflow-hidden text-fg">
       <div className="app-grid-tile pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
-        <InteractiveGridPattern
+        <NoiseField
           key={mounted ? resolvedTheme : "dark"}
-          cellSize={64}
-          skewY={6}
-          wave
-          waveDuration={5}
-          waveGap={4}
           className="absolute inset-0"
-          squaresClassName="stroke-[var(--grid-line)]"
         />
       </div>
 

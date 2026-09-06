@@ -1,6 +1,6 @@
 "use client";
 
-import { InteractiveGridPattern } from "@promexma/ui";
+import { NoiseField } from "@promexma/ui";
 import {
   Bell,
   ClipboardList,
@@ -181,15 +181,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
         )}
       >
         <div className="app-grid-tile pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
-          <InteractiveGridPattern
+          <NoiseField
             key={mounted ? resolvedTheme : "light"}
-            cellSize={64}
-            skewY={6}
-            wave
-            waveDuration={5}
-            waveGap={4}
             className="absolute inset-0"
-            squaresClassName="stroke-[var(--grid-line)]"
           />
         </div>
         <header className="app-safe-x z-30 flex shrink-0 items-center justify-between gap-2 bg-transparent py-3 lg:hidden">
