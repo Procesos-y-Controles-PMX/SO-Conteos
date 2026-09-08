@@ -62,7 +62,7 @@ export default function ConfirmDialog({
             {cancelLabel}
           </button>
           <button type="button" className="btn-primary flex-1" disabled={pending} onClick={onConfirm}>
-            {pending ? "Borrando…" : confirmLabel}
+            {pending ? `${confirmLabel}…` : confirmLabel}
           </button>
         </div>
       </div>

@@ -8,13 +8,23 @@ export async function PATCH(request: Request, { params }: Params) {
   if ("response" in resolved) return resolved.response;
   const { id } = await params;
   try {
+    const { data: existing, error: existingError } = await resolved.supabase
+      .from("cnt_conteos")
+      .select("status")
+      .eq("id", id)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (!existing) return fail("Conteo no encontrado.", 404);
+    if ((existing as { status?: string }).status === "enviado") {
+      return fail("Este conteo ya fue enviado y no se puede editar.", 409);
+    }
+
     const body = (await request.json()) as { sku?: string; patch?: Partial<CountLine> };
     if (!body.sku || !body.patch) return fail("SKU y datos requeridos.");
     const dbPatch: Record<string, unknown> = {};
     if (body.patch.fisico !== undefined) dbPatch.fisico = body.patch.fisico;
     if (body.patch.pendienteEntregar !== undefined) dbPatch.pendiente_entregar = body.patch.pendienteEntregar;
     if (body.patch.pendienteFacturar !== undefined) dbPatch.pendiente_facturar = body.patch.pendienteFacturar;
-    if (body.patch.evidencia !== undefined) dbPatch.evidencia_nombre = body.patch.evidencia;
     const { error } = await resolved.supabase
       .from("cnt_conteo_lineas")
       .update(dbPatch)

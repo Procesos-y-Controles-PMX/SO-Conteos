@@ -3,6 +3,7 @@ import type { CountKind, CountLine, CountSession, Producto } from "@/lib/types";
 import type { InventarioRow } from "@/lib/excel/parseInventario";
 import { mapInventarioMeta, mapLine, mapProducto, mapSession, type CntConteoRow, type CntLineaRow } from "@/lib/db/map";
 import { fetchSucursalById, fetchSucursales } from "@/lib/db/stores";
+import { evidenceRetentionDays, purgeExpiredEvidence, removeConteoEvidence } from "@/lib/evidence";
 
 export { fetchSucursalById, fetchSucursales };
 
@@ -166,11 +167,15 @@ export async function fetchSession(
   if (error) throw error;
   if (!data) return null;
   const row = data as CntConteoRow;
+  if (row.kind === "urgente") {
+    await purgeExpiredEvidence(supabase, id);
+  }
   let lines = await linesFor(supabase, id);
   if (row.kind === "semanal" && row.status !== "enviado" && options.syncCatalog) {
     lines = await syncWeeklyLines(supabase, id, row.id_sucursal, lines);
   }
-  return mapSession(row, lines);
+  const retention = row.kind === "urgente" ? await evidenceRetentionDays(supabase) : undefined;
+  return mapSession(row, lines, { evidenceRetentionDays: retention });
 }
 
 export async function fetchSessions(
@@ -248,6 +253,7 @@ export async function ensureWeekly(
 }
 
 export async function deleteConteo(supabase: SupabaseClient, id: string) {
+  await removeConteoEvidence(supabase, id);
   const { error } = await supabase.from("cnt_conteos").delete().eq("id", id);
   if (error) throw error;
 }

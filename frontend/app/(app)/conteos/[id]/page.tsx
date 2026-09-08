@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import AdminCountReview from "@/components/conteos/AdminCountReview";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -11,12 +12,15 @@ import SkuStepper from "@/components/conteos/SkuStepper";
 import PageHeader from "@/components/ui/PageHeader";
 import { isConteosAdmin } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
-import { deleteConteo, getSession, patchLine, patchSession, submitSession } from "@/lib/store";
+import { deleteConteo, getSession, patchLine, patchSession, submitSession, uploadEvidence } from "@/lib/store";
 import { scopeWeeklySession } from "@/lib/catalog/polvos";
 import { countProgress, type CountLine, type CountSession } from "@/lib/types";
 import { weekLabel } from "@/lib/week";
 
 type Step = "identidad" | "conteo" | "revision" | "enviado";
+
+const START_WARNING =
+  "¿Está seguro de que desea continuar con el proceso? Una vez iniciado, deberá completarse hasta el final.";
 
 function saveErrorMessage(err: unknown) {
   const msg = err instanceof Error ? err.message : "";
@@ -37,6 +41,12 @@ export default function CountSessionPage() {
   const [missing, setMissing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmStart, setConfirmStart] = useState(false);
+  const [pendingIdentity, setPendingIdentity] = useState<{
+    nombre: string;
+    puesto: string;
+  } | null>(null);
+  const [starting, setStarting] = useState(false);
   const saveTimer = useRef<number | null>(null);
   const pendingRef = useRef<Record<string, Partial<CountLine>>>({});
   const sessionIdRef = useRef(params.id);
@@ -109,8 +119,9 @@ export default function CountSessionPage() {
   const { filled, total } = countProgress(current);
   const safeIndex = Math.min(skuIndex, Math.max(0, current.lines.length - 1));
   const locked = current.status === "enviado";
+  const hubHref = current.kind === "semanal" ? "/conteos/semanales" : "/conteos/urgentes";
 
-  async function handleIdentity(payload: { nombre: string; puesto: string }) {
+  async function applyIdentity(payload: { nombre: string; puesto: string }) {
     const next = await patchSession(current.id, {
       counterName: payload.nombre,
       counterPuesto: payload.puesto,
@@ -120,7 +131,17 @@ export default function CountSessionPage() {
     setStep("conteo");
   }
 
+  function handleIdentity(payload: { nombre: string; puesto: string }) {
+    if (current.status === "pendiente") {
+      setPendingIdentity(payload);
+      setConfirmStart(true);
+      return;
+    }
+    void applyIdentity(payload).catch((err: Error) => toast.error(saveErrorMessage(err)));
+  }
+
   function handlePatch(sku: string, patch: Partial<CountLine>) {
+    if (locked) return;
     setSession((prev) => {
       if (!prev) return prev;
       return {
@@ -132,11 +153,38 @@ export default function CountSessionPage() {
     queueSave(sku, patch);
   }
 
+  async function handleEvidence(sku: string, file: File) {
+    if (locked) return;
+    const saved = await uploadEvidence(current.id, sku, file);
+    setSession((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        status: prev.status === "pendiente" ? "en_progreso" : prev.status,
+        lines: prev.lines.map((line) => (line.sku === sku ? { ...line, ...saved } : line)),
+      };
+    });
+  }
+
   async function handleSubmit() {
     await flushSaves();
     if (filled < total) {
       toast.error(`Faltan ${total - filled} SKU por capturar.`);
       setStep("conteo");
+      return;
+    }
+    const missingEvidence = current.lines.filter((line) => {
+      const pending =
+        (line.pendienteEntregar ?? 0) > 0 || (line.pendienteFacturar ?? 0) > 0;
+      if (current.kind === "urgente") return !line.evidenciaPath;
+      if (current.kind === "semanal") return pending && !line.evidenciaPath;
+      return false;
+    });
+    if (missingEvidence.length > 0) {
+      toast.error("Falta evidencia en productos con pendientes o urgentes.");
+      setStep("conteo");
+      const idx = current.lines.findIndex((l) => l.sku === missingEvidence[0].sku);
+      if (idx >= 0) setSkuIndex(idx);
       return;
     }
     const submitted = await submitSession(current.id, {
@@ -147,6 +195,22 @@ export default function CountSessionPage() {
     setSession(scopeWeeklySession(submitted));
     setStep("enviado");
     toast.success("Conteo enviado.");
+  }
+
+  function handleRegresar() {
+    if (locked || step === "enviado") {
+      router.push("/conteos");
+      return;
+    }
+    if (step === "revision") {
+      setStep("conteo");
+      return;
+    }
+    if (step === "conteo" && safeIndex > 0) {
+      setSkuIndex(safeIndex - 1);
+      return;
+    }
+    router.push(hubHref === "/conteos/urgentes" ? "/conteos" : hubHref);
   }
 
   if (adminView) {
@@ -176,6 +240,15 @@ export default function CountSessionPage() {
 
   return (
     <div>
+      {!locked ? (
+        <div className="mb-4">
+          <button type="button" className="btn-secondary min-h-10 gap-2 px-3 text-sm" onClick={handleRegresar}>
+            <ArrowLeft className="h-4 w-4" />
+            Regresar
+          </button>
+        </div>
+      ) : null}
+
       {step !== "conteo" || current.lines.length === 0 ? (
         <PageHeader
           eyebrow={current.kind === "semanal" ? weekLabel(current.weekKey) : "Urgente"}
@@ -188,7 +261,7 @@ export default function CountSessionPage() {
         <IdentityGate
           initialName={current.counterName}
           initialPuesto={current.counterPuesto}
-          onConfirm={(payload) => void handleIdentity(payload)}
+          onConfirm={handleIdentity}
         />
       ) : null}
 
@@ -198,6 +271,7 @@ export default function CountSessionPage() {
           index={safeIndex}
           onIndex={setSkuIndex}
           onPatch={handlePatch}
+          onEvidence={handleEvidence}
           onFinish={() => {
             void flushSaves().finally(() => setStep("revision"));
           }}
@@ -210,10 +284,10 @@ export default function CountSessionPage() {
           <div className="fixed inset-x-0 bottom-0 z-40 bg-canvas/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm lg:static lg:bg-transparent lg:p-0">
             <div className="mx-auto flex max-w-lg flex-col gap-2 sm:flex-row">
               <button type="button" className="btn-primary flex-1" onClick={() => void handleSubmit()}>
-                Enviar conteo
+                Confirmar y enviar
               </button>
               <button type="button" className="btn-secondary flex-1" onClick={() => setStep("conteo")}>
-                Volver a SKUs
+                Volver a corregir
               </button>
             </div>
           </div>
@@ -228,6 +302,7 @@ export default function CountSessionPage() {
             <p className="mt-2 text-sm text-fg-subtle">
               {current.counterName} · {current.counterPuesto}
             </p>
+            <p className="mt-2 text-sm text-fg-subtle">Ya no se puede editar este conteo.</p>
           </div>
           <DiffReview
             session={current}
@@ -240,6 +315,30 @@ export default function CountSessionPage() {
           </button>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={confirmStart}
+        title="Iniciar conteo"
+        body={START_WARNING}
+        confirmLabel="Continuar"
+        cancelLabel="Cancelar"
+        pending={starting}
+        onCancel={() => {
+          setConfirmStart(false);
+          setPendingIdentity(null);
+        }}
+        onConfirm={() => {
+          if (!pendingIdentity) return;
+          setStarting(true);
+          void applyIdentity(pendingIdentity)
+            .then(() => {
+              setConfirmStart(false);
+              setPendingIdentity(null);
+            })
+            .catch((err: Error) => toast.error(saveErrorMessage(err)))
+            .finally(() => setStarting(false));
+        }}
+      />
     </div>
   );
 }

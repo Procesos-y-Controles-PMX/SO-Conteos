@@ -70,6 +70,9 @@ export type CountLine = {
   pendienteEntregar: number | null;
   pendienteFacturar: number | null;
   evidencia?: string;
+  evidenciaPath?: string;
+  evidenciaAt?: string;
+  evidenciaMime?: string;
 };
 
 export type CountSession = {
@@ -84,6 +87,7 @@ export type CountSession = {
   counterName?: string;
   counterPuesto?: string;
   comentario?: string;
+  evidenceRetentionDays?: number;
   lines: CountLine[];
 };
 

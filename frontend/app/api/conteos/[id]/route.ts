@@ -24,6 +24,17 @@ export async function PATCH(request: Request, { params }: Params) {
   if ("response" in resolved) return resolved.response;
   const { id } = await params;
   try {
+    const { data: existing, error: existingError } = await resolved.supabase
+      .from("cnt_conteos")
+      .select("status")
+      .eq("id", id)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (!existing) return fail("Conteo no encontrado.", 404);
+    if ((existing as { status?: string }).status === "enviado") {
+      return fail("Este conteo ya fue enviado y no se puede editar.", 409);
+    }
+
     const body = (await request.json()) as {
       counterName?: string;
       counterPuesto?: string;

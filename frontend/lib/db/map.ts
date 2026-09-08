@@ -41,6 +41,9 @@ export type CntLineaRow = {
   pendiente_entregar: number | string | null;
   pendiente_facturar: number | string | null;
   evidencia_nombre: string | null;
+  evidencia_path?: string | null;
+  evidencia_at?: string | null;
+  evidencia_mime?: string | null;
 };
 
 function num(value: number | string | null | undefined): number | null {
@@ -104,12 +107,16 @@ export function mapLine(row: CntLineaRow): import("@/lib/types").CountLine {
     pendienteEntregar: num(row.pendiente_entregar) ?? 0,
     pendienteFacturar: num(row.pendiente_facturar) ?? 0,
     evidencia: row.evidencia_nombre ?? undefined,
+    evidenciaPath: row.evidencia_path ?? undefined,
+    evidenciaAt: row.evidencia_at ?? undefined,
+    evidenciaMime: row.evidencia_mime ?? undefined,
   };
 }
 
 export function mapSession(
   row: CntConteoRow,
   lines: import("@/lib/types").CountLine[] = [],
+  extra?: { evidenceRetentionDays?: number },
 ): import("@/lib/types").CountSession {
   return {
     id: row.id,
@@ -123,6 +130,7 @@ export function mapSession(
     counterName: row.counter_name ?? undefined,
     counterPuesto: row.counter_puesto ?? undefined,
     comentario: row.comentario ?? undefined,
+    evidenceRetentionDays: extra?.evidenceRetentionDays,
     lines,
   };
 }

@@ -1,4 +1,5 @@
 import { decodeSpreadsheetBuffer, keepConteoSpreadsheet, parseDelimitedText } from "@/lib/excel/parseInventario";
+import { EVIDENCE_MAX_BYTES, isAllowedEvidenceMime } from "@/lib/evidence";
 import type { SoAccount, SoAccountsSourceStatus } from "@/lib/so-account-types";
 import type { CountKind, CountLine, CountSession, CtzUsuario, InventarioMeta, Producto, SemaforoResumen, Sucursal, ZonaSemaforo } from "@/lib/types";
 
@@ -170,6 +171,65 @@ export async function patchLine(sessionId: string, sku: string, patch: Partial<C
       body: JSON.stringify({ sku, patch }),
     }),
   );
+}
+
+export async function uploadEvidence(sessionId: string, sku: string, file: File) {
+  if (!isAllowedEvidenceMime(file.type, file.name)) {
+    throw new Error("Usa una foto o un video.");
+  }
+  if (file.size > EVIDENCE_MAX_BYTES) {
+    throw new Error("El archivo no puede pesar más de 25 MB.");
+  }
+  const signed = await parse<{ path: string; token: string; signedUrl: string }>(
+    await fetch(`/api/conteos/${sessionId}/evidencia`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sku,
+        fileName: file.name,
+        contentType: file.type,
+        bytes: file.size,
+      }),
+    }),
+  );
+  const put = await fetch(signed.signedUrl, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${signed.token}`,
+      "Content-Type": file.type || "application/octet-stream",
+    },
+    body: file,
+  });
+  if (!put.ok) {
+    throw new Error("No se pudo subir el archivo. Revisa la conexión.");
+  }
+  const saved = await parse<{
+    evidencia?: string;
+    evidenciaPath?: string;
+    evidenciaAt?: string;
+    evidenciaMime?: string | null;
+  }>(
+    await fetch(`/api/conteos/${sessionId}/evidencia`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sku,
+        path: signed.path,
+        fileName: file.name,
+        contentType: file.type,
+      }),
+    }),
+  );
+  return {
+    evidencia: saved.evidencia ?? file.name,
+    evidenciaPath: saved.evidenciaPath ?? signed.path,
+    evidenciaAt: saved.evidenciaAt,
+    evidenciaMime: saved.evidenciaMime ?? file.type,
+  };
+}
+
+export function evidenceViewUrl(sessionId: string, sku: string) {
+  return `/api/conteos/${sessionId}/evidencia?sku=${encodeURIComponent(sku)}`;
 }
 
 export async function submitSession(

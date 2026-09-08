@@ -42,17 +42,20 @@ export default function SkuStepper({
   index,
   onIndex,
   onPatch,
+  onEvidence,
   onFinish,
 }: {
   session: CountSession;
   index: number;
   onIndex: (next: number) => void;
   onPatch: (sku: string, patch: Partial<CountLine>) => void;
+  onEvidence?: (sku: string, file: File) => Promise<void>;
   onFinish: () => void;
 }) {
   const line = session.lines[index];
   const total = session.lines.length;
   const [qtyMode, setQtyMode] = useState<QtyMode>("sacos");
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     setQtyMode(readPreferredQtyMode());
@@ -88,7 +91,11 @@ export default function SkuStepper({
     );
   }
 
-  const requireEvidence = session.kind === "urgente";
+  const hasPending =
+    (line.pendienteEntregar ?? 0) > 0 || (line.pendienteFacturar ?? 0) > 0;
+  const showEvidence = session.kind === "urgente" || session.kind === "semanal";
+  const requireEvidence =
+    session.kind === "urgente" || (session.kind === "semanal" && hasPending);
   const last = index >= total - 1;
   const counted = session.lines.filter((l) => l.fisico != null).length;
   const bagKg = bagKgFromName(line.nombre);
@@ -112,8 +119,12 @@ export default function SkuStepper({
     if (line.fisico == null) {
       onPatch(line.sku, { fisico: 0 });
     }
-    if (requireEvidence && !line.evidencia) {
-      toast.error("Adjunta foto o video de este producto.");
+    if (requireEvidence && !line.evidenciaPath) {
+      toast.error(
+        session.kind === "semanal"
+          ? "Adjunta foto de la mercancía pendiente de entregar o facturar."
+          : "Adjunta foto o video de este producto.",
+      );
       return;
     }
     if (last) onFinish();
@@ -214,18 +225,46 @@ export default function SkuStepper({
           />
         </div>
 
-        {requireEvidence ? (
-          <label className="neu-button mt-5 flex min-h-11 cursor-pointer items-center gap-3 rounded-sm px-4 py-3 text-sm text-fg">
-            <Camera className="h-4 w-4 shrink-0" />
-            <span className="min-w-0 truncate">{line.evidencia ? line.evidencia : "Adjuntar foto o video"}</span>
-            <input
-              type="file"
-              accept="image/*,video/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => onPatch(line.sku, { evidencia: e.target.files?.[0]?.name })}
-            />
-          </label>
+        {showEvidence ? (
+          <div className="mt-5">
+            <p className="field-label mb-1.5">Evidencia fotográfica</p>
+            <p className="mb-3 text-[11px] leading-relaxed text-fg-subtle">
+              {session.kind === "semanal"
+                ? "Si capturaste pendiente de entregar o facturar, adjunta una foto clara de esa mercancía (etiquetas/ubicación visibles)."
+                : "Adjunta foto o video del producto contado. Se borra sola a los días configurados."}
+            </p>
+            <label className="neu-button flex min-h-11 cursor-pointer items-center gap-3 rounded-sm px-4 py-3 text-sm text-fg">
+              <Camera className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 truncate">
+                {uploading
+                  ? "Subiendo evidencia…"
+                  : line.evidenciaPath
+                    ? line.evidencia || "Evidencia adjunta"
+                    : requireEvidence
+                      ? "Adjuntar foto (requerido)"
+                      : "Adjuntar foto (opcional)"}
+              </span>
+              <input
+                type="file"
+                accept="image/*,video/*"
+                capture="environment"
+                className="hidden"
+                disabled={uploading || !onEvidence}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file || !onEvidence) return;
+                  setUploading(true);
+                  void onEvidence(line.sku, file)
+                    .catch((err: Error) => toast.error(err.message || "No se pudo subir."))
+                    .finally(() => setUploading(false));
+                }}
+              />
+            </label>
+            <p className="mt-2 text-center text-[11px] text-fg-faint">
+              Se borra sola a los {session.evidenceRetentionDays ?? 14} días.
+            </p>
+          </div>
         ) : null}
       </article>
 
@@ -235,8 +274,8 @@ export default function SkuStepper({
             <ChevronLeft className="h-4 w-4" />
             Anterior
           </button>
-          <button type="button" className="btn-primary flex-[1.3]" onClick={goNext}>
-            {last ? "Revisar diferencias" : "Siguiente"}
+          <button type="button" className="btn-primary flex-[1.3]" disabled={uploading} onClick={goNext}>
+            {last ? "Revisar captura" : "Siguiente"}
             {!last ? <ChevronRight className="h-4 w-4" /> : null}
           </button>
         </div>

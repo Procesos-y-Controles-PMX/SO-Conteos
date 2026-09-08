@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
@@ -9,6 +10,11 @@ import { listSucursales, sessionsForWeek, deleteConteo } from "@/lib/store";
 import { lineDiff, type CountSession, type Sucursal } from "@/lib/types";
 import { cn, downloadTextFile, formatNumber } from "@/lib/utils";
 import { nearbyWeekKeys, weekLabel } from "@/lib/week";
+
+function qtyCell(value: number | null | undefined) {
+  if (value == null) return "—";
+  return formatNumber(Number(value), 2);
+}
 
 export default function DescargasPage() {
   const weeks = useMemo(() => nearbyWeekKeys(), []);
@@ -19,6 +25,7 @@ export default function DescargasPage() {
   const [tienda, setTienda] = useState("todas");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     void listSucursales().then(setSucursales);
@@ -26,6 +33,7 @@ export default function DescargasPage() {
 
   useEffect(() => {
     void sessionsForWeek(week).then(setSessions);
+    setExpandedId(null);
   }, [week]);
 
   const zonas = Array.from(new Set(sucursales.map((s) => s.zona)));
@@ -91,7 +99,7 @@ export default function DescargasPage() {
       <PageHeader
         eyebrow="Administración"
         title="Descargas"
-        subtitle="Filtros por zona, tienda y pestaña de semana."
+        subtitle="Filtros por zona, tienda y pestaña de semana. CSV o vista en página."
         actions={
           <button type="button" className="btn-primary" onClick={download} disabled={rows.length === 0}>
             Descargar CSV
@@ -138,6 +146,7 @@ export default function DescargasPage() {
         <table className="min-w-full text-left text-sm">
           <thead>
             <tr className="text-[10px] font-bold uppercase tracking-wider text-fg-faint">
+              <th className="px-4 py-3" />
               <th className="px-4 py-3">Tipo</th>
               <th className="px-4 py-3">Sucursal</th>
               <th className="px-4 py-3">Estatus</th>
@@ -150,7 +159,7 @@ export default function DescargasPage() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-fg-subtle">
+                <td colSpan={8} className="px-4 py-10 text-center text-fg-subtle">
                   Sin conteos con estos filtros.
                 </td>
               </tr>
@@ -158,24 +167,100 @@ export default function DescargasPage() {
               rows.map((session) => {
                 const suc = sucursales.find((s) => s.id === session.sucursalId);
                 const diffs = session.lines.filter((l) => (lineDiff(l) ?? 0) !== 0).length;
+                const open = expandedId === session.id;
                 return (
-                  <tr key={session.id} className="border-t border-line-subtle">
-                    <td className="px-4 py-3 capitalize">{session.kind}</td>
-                    <td className="px-4 py-3">{suc?.nombre}</td>
-                    <td className="px-4 py-3">{session.status.replace("_", " ")}</td>
-                    <td className="px-4 py-3">{session.counterName ?? "—"}</td>
-                    <td className="px-4 py-3 tabular-nums">{session.lines.length}</td>
-                    <td className="px-4 py-3 tabular-nums">{formatNumber(diffs, 0)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        className="btn-danger min-h-8 px-2 py-1 text-xs"
-                        onClick={() => setPendingId(session.id)}
-                      >
-                        Borrar
-                      </button>
-                    </td>
-                  </tr>
+                  <Fragment key={session.id}>
+                    <tr className="border-t border-line-subtle">
+                      <td className="px-2 py-3">
+                        <button
+                          type="button"
+                          className="neu-button rounded-full p-2 text-fg-muted"
+                          aria-expanded={open}
+                          aria-label={open ? "Ocultar detalle" : "Ver detalle"}
+                          onClick={() => setExpandedId(open ? null : session.id)}
+                        >
+                          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 capitalize">{session.kind}</td>
+                      <td className="px-4 py-3">{suc?.nombre}</td>
+                      <td className="px-4 py-3">{session.status.replace("_", " ")}</td>
+                      <td className="px-4 py-3">{session.counterName ?? "—"}</td>
+                      <td className="px-4 py-3 tabular-nums">{session.lines.length}</td>
+                      <td className="px-4 py-3 tabular-nums">{formatNumber(diffs, 0)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          className="btn-danger min-h-8 px-2 py-1 text-xs"
+                          onClick={() => setPendingId(session.id)}
+                        >
+                          Borrar
+                        </button>
+                      </td>
+                    </tr>
+                    {open ? (
+                      <tr className="border-t border-line-subtle bg-muted/40">
+                        <td colSpan={8} className="px-4 py-4">
+                          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-fg-faint">
+                            Detalle de líneas
+                          </p>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full text-left text-xs">
+                              <thead>
+                                <tr className="text-[10px] font-bold uppercase tracking-wider text-fg-faint">
+                                  <th className="px-2 py-2">SKU</th>
+                                  <th className="px-2 py-2">Producto</th>
+                                  <th className="px-2 py-2">UM</th>
+                                  <th className="px-2 py-2 text-right">Teórico</th>
+                                  <th className="px-2 py-2 text-right">Físico</th>
+                                  <th className="px-2 py-2 text-right">Pend. ent.</th>
+                                  <th className="px-2 py-2 text-right">Pend. fact.</th>
+                                  <th className="px-2 py-2 text-right">Diff</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {session.lines.map((line) => {
+                                  const diff = lineDiff(line);
+                                  return (
+                                    <tr key={line.sku} className="border-t border-line-subtle">
+                                      <td className="px-2 py-2 font-mono tabular-nums">{line.sku}</td>
+                                      <td className="px-2 py-2">{line.nombre}</td>
+                                      <td className="px-2 py-2">{line.um}</td>
+                                      <td className="px-2 py-2 text-right tabular-nums">{qtyCell(line.teorico)}</td>
+                                      <td className="px-2 py-2 text-right tabular-nums">{qtyCell(line.fisico)}</td>
+                                      <td className="px-2 py-2 text-right tabular-nums">
+                                        {qtyCell(line.pendienteEntregar)}
+                                      </td>
+                                      <td className="px-2 py-2 text-right tabular-nums">
+                                        {qtyCell(line.pendienteFacturar)}
+                                      </td>
+                                      <td
+                                        className={cn(
+                                          "px-2 py-2 text-right font-semibold tabular-nums",
+                                          (diff ?? 0) < 0
+                                            ? "text-brand"
+                                            : (diff ?? 0) > 0
+                                              ? "text-emerald-600"
+                                              : "text-fg",
+                                        )}
+                                      >
+                                        {diff == null ? "—" : `${diff > 0 ? "+" : ""}${formatNumber(diff, 2)}`}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                          {session.comentario ? (
+                            <p className="mt-3 text-sm text-fg-subtle">
+                              <span className="font-semibold text-fg">Comentario:</span> {session.comentario}
+                            </p>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 );
               })
             )}

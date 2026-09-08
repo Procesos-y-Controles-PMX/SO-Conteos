@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CalendarClock, ChevronRight, Siren } from "lucide-react";
 import SemaforoDot from "@/components/conteos/SemaforoDot";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
 import { useAuth } from "@/lib/auth";
 import { getInventario, sessionsForSucursal, weeklySessionFor } from "@/lib/store";
@@ -11,7 +13,11 @@ import { countProgress, sessionSemaforo, type CountSession, type InventarioMeta 
 import { formatDateTime } from "@/lib/utils";
 import { weekKeyFromDate, weekLabel } from "@/lib/week";
 
+const START_WARNING =
+  "¿Está seguro de que desea continuar con el proceso? Una vez iniciado, deberá completarse hasta el final.";
+
 export default function ConteosHubPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const sucursalId = user?.sucursalId ?? "";
   const [weekly, setWeekly] = useState<CountSession | null>(null);
@@ -19,6 +25,7 @@ export default function ConteosHubPage() {
   const [inventario, setInventario] = useState<InventarioMeta | null>(null);
   const [skuCount, setSkuCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [confirmStart, setConfirmStart] = useState(false);
 
   useEffect(() => {
     if (!sucursalId) return;
@@ -40,6 +47,16 @@ export default function ConteosHubPage() {
   const urgentesPendientes = urgentes.filter((s) => s.status !== "enviado");
   const urgentePendiente = urgentesPendientes[0] ?? urgentes[0];
   const weeklyProgress = weekly ? countProgress(weekly) : { filled: 0, total: skuCount };
+  const weeklyHref = weekly ? `/conteos/${weekly.id}` : "/conteos/semanales";
+  const needsStartWarning = Boolean(weekly && weekly.status === "pendiente");
+
+  function openWeekly() {
+    if (needsStartWarning) {
+      setConfirmStart(true);
+      return;
+    }
+    router.push(weeklyHref);
+  }
 
   return (
     <div>
@@ -76,13 +93,15 @@ export default function ConteosHubPage() {
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Link href={weekly ? `/conteos/${weekly.id}` : "/conteos/semanales"} className="neu-raised rounded-lg p-5">
+        <button type="button" onClick={openWeekly} className="neu-raised rounded-lg p-5 text-left">
           <div className="flex items-start justify-between gap-3">
             <CalendarClock className="h-5 w-5 text-steel" />
             <SemaforoDot value={sessionSemaforo(weekly ?? undefined)} />
           </div>
           <h2 className="mt-3 font-display text-xl font-semibold text-fg">Conteo semanal</h2>
-          <p className="mt-1 text-sm text-fg-subtle">Stock L1–L12 de esta sucursal. Sin evidencia.</p>
+          <p className="mt-1 text-sm text-fg-subtle">
+            Stock L1–L12 de esta sucursal. Foto de evidencia si hay pendientes.
+          </p>
           <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted-strong">
             <div
               className="h-full rounded-full bg-steel transition-all"
@@ -95,7 +114,7 @@ export default function ConteosHubPage() {
             {weekly?.status === "enviado" ? "Ver enviado" : weeklyProgress.filled > 0 ? "Continuar" : "Empezar"}
             <ChevronRight className="h-4 w-4" />
           </p>
-        </Link>
+        </button>
 
         <Link
           href={urgentePendiente ? `/conteos/${urgentePendiente.id}` : "/conteos/urgentes"}
@@ -120,6 +139,19 @@ export default function ConteosHubPage() {
           </p>
         </Link>
       </div>
+
+      <ConfirmDialog
+        open={confirmStart}
+        title="Iniciar conteo"
+        body={START_WARNING}
+        confirmLabel="Continuar"
+        cancelLabel="Cancelar"
+        onCancel={() => setConfirmStart(false)}
+        onConfirm={() => {
+          setConfirmStart(false);
+          router.push(weeklyHref);
+        }}
+      />
     </div>
   );
 }

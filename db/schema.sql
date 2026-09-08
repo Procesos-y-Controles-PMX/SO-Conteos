@@ -67,6 +67,9 @@ create table if not exists cnt_conteo_lineas (
   pendiente_entregar numeric default 0,
   pendiente_facturar numeric default 0,
   evidencia_nombre text,
+  evidencia_path text,
+  evidencia_at timestamptz,
+  evidencia_mime text,
   unique (id_conteo, sku)
 );
 
@@ -80,7 +83,8 @@ alter table cnt_conteo_lineas enable row level security;
 
 insert into cnt_ajustes (clave, valor) values
   ('upload_window', '{"start":"05:00","end":"08:00"}'::jsonb),
-  ('ignore_upload_window', 'false'::jsonb)
+  ('ignore_upload_window', 'false'::jsonb),
+  ('evidencia_retention_days', '14'::jsonb)
 on conflict (clave) do nothing;
 
 delete from cnt_inventario_sku
