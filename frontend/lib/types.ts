@@ -69,11 +69,23 @@ export type CountLine = {
   fisico: number | null;
   pendienteEntregar: number | null;
   pendienteFacturar: number | null;
+  costo?: number;
+  comentario?: string;
   evidencia?: string;
   evidenciaPath?: string;
   evidenciaAt?: string;
   evidenciaMime?: string;
+  evidenciaEntregar?: string;
+  evidenciaEntregarPath?: string;
+  evidenciaEntregarAt?: string;
+  evidenciaEntregarMime?: string;
+  evidenciaFacturar?: string;
+  evidenciaFacturarPath?: string;
+  evidenciaFacturarAt?: string;
+  evidenciaFacturarMime?: string;
 };
+
+export type EvidenceKind = "general" | "entregar" | "facturar";
 
 export type CountSession = {
   id: string;
@@ -107,6 +119,13 @@ export function lineDiff(line: CountLine): number | null {
   const ajustado = lineAjustado(line);
   if (ajustado == null) return null;
   return ajustado - line.teorico;
+}
+
+/** Signed amount for the difference: diff × unit cost. */
+export function lineMonto(line: CountLine): number | null {
+  const diff = lineDiff(line);
+  if (diff == null) return null;
+  return diff * (line.costo ?? 0);
 }
 
 export function countProgress(session: CountSession): { filled: number; total: number } {

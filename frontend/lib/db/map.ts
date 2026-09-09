@@ -40,10 +40,20 @@ export type CntLineaRow = {
   fisico: number | string | null;
   pendiente_entregar: number | string | null;
   pendiente_facturar: number | string | null;
+  costo?: number | string | null;
+  comentario?: string | null;
   evidencia_nombre: string | null;
   evidencia_path?: string | null;
   evidencia_at?: string | null;
   evidencia_mime?: string | null;
+  evidencia_entregar_nombre?: string | null;
+  evidencia_entregar_path?: string | null;
+  evidencia_entregar_at?: string | null;
+  evidencia_entregar_mime?: string | null;
+  evidencia_facturar_nombre?: string | null;
+  evidencia_facturar_path?: string | null;
+  evidencia_facturar_at?: string | null;
+  evidencia_facturar_mime?: string | null;
 };
 
 function num(value: number | string | null | undefined): number | null {
@@ -106,10 +116,20 @@ export function mapLine(row: CntLineaRow): import("@/lib/types").CountLine {
     fisico: num(row.fisico),
     pendienteEntregar: num(row.pendiente_entregar) ?? 0,
     pendienteFacturar: num(row.pendiente_facturar) ?? 0,
+    costo: num(row.costo) ?? 0,
+    comentario: row.comentario?.trim() || undefined,
     evidencia: row.evidencia_nombre ?? undefined,
     evidenciaPath: row.evidencia_path ?? undefined,
     evidenciaAt: row.evidencia_at ?? undefined,
     evidenciaMime: row.evidencia_mime ?? undefined,
+    evidenciaEntregar: row.evidencia_entregar_nombre ?? undefined,
+    evidenciaEntregarPath: row.evidencia_entregar_path ?? undefined,
+    evidenciaEntregarAt: row.evidencia_entregar_at ?? undefined,
+    evidenciaEntregarMime: row.evidencia_entregar_mime ?? undefined,
+    evidenciaFacturar: row.evidencia_facturar_nombre ?? undefined,
+    evidenciaFacturarPath: row.evidencia_facturar_path ?? undefined,
+    evidenciaFacturarAt: row.evidencia_facturar_at ?? undefined,
+    evidenciaFacturarMime: row.evidencia_facturar_mime ?? undefined,
   };
 }
 

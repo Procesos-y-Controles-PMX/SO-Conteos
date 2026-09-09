@@ -25,6 +25,7 @@ export async function PATCH(request: Request, { params }: Params) {
     if (body.patch.fisico !== undefined) dbPatch.fisico = body.patch.fisico;
     if (body.patch.pendienteEntregar !== undefined) dbPatch.pendiente_entregar = body.patch.pendienteEntregar;
     if (body.patch.pendienteFacturar !== undefined) dbPatch.pendiente_facturar = body.patch.pendienteFacturar;
+    if (body.patch.comentario !== undefined) dbPatch.comentario = body.patch.comentario;
     const { error } = await resolved.supabase
       .from("cnt_conteo_lineas")
       .update(dbPatch)

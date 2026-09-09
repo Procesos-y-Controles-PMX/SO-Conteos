@@ -10,7 +10,7 @@ npm install
 npm run dev                  # http://localhost:3004
 ```
 
-Copia `frontend/.env.example` a `frontend/.env.local`. Usa el mismo proyecto de Supabase que Cotizador (`ctz_sucursales` / `ctz_usuarios`). En Supabase corre `db/schema.sql` una vez. Si `cnt_inventario_sku` ya existía con PK solo por SKU, corre también `db/patch-inventario-por-sucursal.sql`. Para fotos de urgentes, corre `db/patch-evidencia.sql`.
+Copia `frontend/.env.example` a `frontend/.env.local`. Usa el mismo proyecto de Supabase que Cotizador (`ctz_sucursales` / `ctz_usuarios`). En Supabase corre `db/schema.sql` una vez. Si `cnt_inventario_sku` ya existía con PK solo por SKU, corre también `db/patch-inventario-por-sucursal.sql`. Para fotos de urgentes y pendientes semanales, corre `db/patch-evidencia.sql` y `db/patch-feedback-lineas.sql`.
 
 ### Acceso
 

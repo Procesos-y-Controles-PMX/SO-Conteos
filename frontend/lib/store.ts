@@ -173,7 +173,12 @@ export async function patchLine(sessionId: string, sku: string, patch: Partial<C
   );
 }
 
-export async function uploadEvidence(sessionId: string, sku: string, file: File) {
+export async function uploadEvidence(
+  sessionId: string,
+  sku: string,
+  file: File,
+  kind: import("@/lib/types").EvidenceKind = "general",
+) {
   if (!isAllowedEvidenceMime(file.type, file.name)) {
     throw new Error("Usa una foto o un video.");
   }
@@ -189,6 +194,7 @@ export async function uploadEvidence(sessionId: string, sku: string, file: File)
         fileName: file.name,
         contentType: file.type,
         bytes: file.size,
+        kind,
       }),
     }),
   );
@@ -203,12 +209,7 @@ export async function uploadEvidence(sessionId: string, sku: string, file: File)
   if (!put.ok) {
     throw new Error("No se pudo subir el archivo. Revisa la conexión.");
   }
-  const saved = await parse<{
-    evidencia?: string;
-    evidenciaPath?: string;
-    evidenciaAt?: string;
-    evidenciaMime?: string | null;
-  }>(
+  const saved = await parse<Partial<CountLine> & { saved?: boolean }>(
     await fetch(`/api/conteos/${sessionId}/evidencia`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -217,9 +218,26 @@ export async function uploadEvidence(sessionId: string, sku: string, file: File)
         path: signed.path,
         fileName: file.name,
         contentType: file.type,
+        kind,
       }),
     }),
   );
+  if (kind === "entregar") {
+    return {
+      evidenciaEntregar: saved.evidenciaEntregar ?? file.name,
+      evidenciaEntregarPath: saved.evidenciaEntregarPath ?? signed.path,
+      evidenciaEntregarAt: saved.evidenciaEntregarAt,
+      evidenciaEntregarMime: saved.evidenciaEntregarMime ?? file.type,
+    };
+  }
+  if (kind === "facturar") {
+    return {
+      evidenciaFacturar: saved.evidenciaFacturar ?? file.name,
+      evidenciaFacturarPath: saved.evidenciaFacturarPath ?? signed.path,
+      evidenciaFacturarAt: saved.evidenciaFacturarAt,
+      evidenciaFacturarMime: saved.evidenciaFacturarMime ?? file.type,
+    };
+  }
   return {
     evidencia: saved.evidencia ?? file.name,
     evidenciaPath: saved.evidenciaPath ?? signed.path,
@@ -228,8 +246,12 @@ export async function uploadEvidence(sessionId: string, sku: string, file: File)
   };
 }
 
-export function evidenceViewUrl(sessionId: string, sku: string) {
-  return `/api/conteos/${sessionId}/evidencia?sku=${encodeURIComponent(sku)}`;
+export function evidenceViewUrl(
+  sessionId: string,
+  sku: string,
+  kind: import("@/lib/types").EvidenceKind = "general",
+) {
+  return `/api/conteos/${sessionId}/evidencia?sku=${encodeURIComponent(sku)}&kind=${kind}`;
 }
 
 export async function submitSession(

@@ -14,10 +14,10 @@ import { isConteosAdmin } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { deleteConteo, getSession, patchLine, patchSession, submitSession, uploadEvidence } from "@/lib/store";
 import { scopeWeeklySession } from "@/lib/catalog/polvos";
-import { countProgress, type CountLine, type CountSession } from "@/lib/types";
+import { countProgress, lineDiff, type CountLine, type CountSession, type EvidenceKind } from "@/lib/types";
 import { weekLabel } from "@/lib/week";
 
-type Step = "identidad" | "conteo" | "revision" | "enviado";
+type Step = "identidad" | "conteo" | "revision" | "revision_diffs" | "enviado";
 
 const START_WARNING =
   "¿Está seguro de que desea continuar con el proceso? Una vez iniciado, deberá completarse hasta el final.";
@@ -37,7 +37,6 @@ export default function CountSessionPage() {
   const [session, setSession] = useState<CountSession | null>(null);
   const [step, setStep] = useState<Step>("identidad");
   const [skuIndex, setSkuIndex] = useState(0);
-  const [comentario, setComentario] = useState("");
   const [missing, setMissing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -93,7 +92,6 @@ export default function CountSessionPage() {
     void getSession(params.id)
       .then((found) => {
         setSession(scopeWeeklySession(found));
-        setComentario(found.comentario ?? "");
         if (found.status === "enviado") setStep("enviado");
         else if (found.counterName && found.counterPuesto) setStep("conteo");
         else setStep("identidad");
@@ -153,9 +151,9 @@ export default function CountSessionPage() {
     queueSave(sku, patch);
   }
 
-  async function handleEvidence(sku: string, file: File) {
+  async function handleEvidence(sku: string, file: File, kind: EvidenceKind = "general") {
     if (locked) return;
-    const saved = await uploadEvidence(current.id, sku, file);
+    const saved = await uploadEvidence(current.id, sku, file, kind);
     setSession((prev) => {
       if (!prev) return prev;
       return {
@@ -174,10 +172,12 @@ export default function CountSessionPage() {
       return;
     }
     const missingEvidence = current.lines.filter((line) => {
-      const pending =
-        (line.pendienteEntregar ?? 0) > 0 || (line.pendienteFacturar ?? 0) > 0;
       if (current.kind === "urgente") return !line.evidenciaPath;
-      if (current.kind === "semanal") return pending && !line.evidenciaPath;
+      if (current.kind === "semanal") {
+        const needEnt = (line.pendienteEntregar ?? 0) > 0 && !line.evidenciaEntregarPath;
+        const needFac = (line.pendienteFacturar ?? 0) > 0 && !line.evidenciaFacturarPath;
+        return needEnt || needFac;
+      }
       return false;
     });
     if (missingEvidence.length > 0) {
@@ -187,10 +187,19 @@ export default function CountSessionPage() {
       if (idx >= 0) setSkuIndex(idx);
       return;
     }
+    const missingComments = current.lines.filter((line) => {
+      const diff = lineDiff(line);
+      return diff != null && diff !== 0 && !(line.comentario ?? "").trim();
+    });
+    if (missingComments.length > 0) {
+      toast.error(`Faltan comentarios en ${missingComments.length} diferencia(s).`);
+      setStep("revision_diffs");
+      return;
+    }
     const submitted = await submitSession(current.id, {
       counterName: current.counterName ?? "",
       counterPuesto: current.counterPuesto ?? "",
-      comentario,
+      comentario: "",
     });
     setSession(scopeWeeklySession(submitted));
     setStep("enviado");
@@ -200,6 +209,10 @@ export default function CountSessionPage() {
   function handleRegresar() {
     if (locked || step === "enviado") {
       router.push("/conteos");
+      return;
+    }
+    if (step === "revision_diffs") {
+      setStep("revision");
       return;
     }
     if (step === "revision") {
@@ -280,14 +293,34 @@ export default function CountSessionPage() {
 
       {step === "revision" && !locked ? (
         <div className="space-y-4 pb-24">
-          <DiffReview session={current} comentario={comentario} onComentario={setComentario} />
+          <DiffReview session={current} mode="captura" readOnly />
+          <div className="fixed inset-x-0 bottom-0 z-40 bg-canvas/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm lg:static lg:bg-transparent lg:p-0">
+            <div className="mx-auto flex max-w-lg flex-col gap-2 sm:flex-row">
+              <button type="button" className="btn-primary flex-1" onClick={() => setStep("revision_diffs")}>
+                Continuar
+              </button>
+              <button type="button" className="btn-secondary flex-1" onClick={() => setStep("conteo")}>
+                Volver a corregir
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {step === "revision_diffs" && !locked ? (
+        <div className="space-y-4 pb-24">
+          <DiffReview
+            session={current}
+            mode="diferencias"
+            onLineComment={(sku, comentario) => handlePatch(sku, { comentario })}
+          />
           <div className="fixed inset-x-0 bottom-0 z-40 bg-canvas/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm lg:static lg:bg-transparent lg:p-0">
             <div className="mx-auto flex max-w-lg flex-col gap-2 sm:flex-row">
               <button type="button" className="btn-primary flex-1" onClick={() => void handleSubmit()}>
                 Confirmar y enviar
               </button>
-              <button type="button" className="btn-secondary flex-1" onClick={() => setStep("conteo")}>
-                Volver a corregir
+              <button type="button" className="btn-secondary flex-1" onClick={() => setStep("revision")}>
+                Volver a la captura
               </button>
             </div>
           </div>
@@ -304,12 +337,7 @@ export default function CountSessionPage() {
             </p>
             <p className="mt-2 text-sm text-fg-subtle">Ya no se puede editar este conteo.</p>
           </div>
-          <DiffReview
-            session={current}
-            comentario={current.comentario ?? ""}
-            onComentario={() => undefined}
-            readOnly
-          />
+          <DiffReview session={current} mode="diferencias" readOnly />
           <button type="button" className="btn-secondary w-full" onClick={() => router.push("/conteos")}>
             Volver a conteos
           </button>

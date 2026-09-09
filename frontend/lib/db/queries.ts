@@ -84,6 +84,7 @@ async function insertSessionLines(supabase: SupabaseClient, conteoId: string, pr
         nombre: p.nombre,
         um: p.um,
         teorico: p.teorico,
+        costo: p.costo ?? 0,
         pendiente_entregar: 0,
         pendiente_facturar: 0,
       })),
@@ -136,10 +137,13 @@ async function syncWeeklyLines(supabase: SupabaseClient, conteoId: string, sucur
   for (const line of lines) {
     if (line.fisico != null) continue;
     const sap = teoricoBySku.get(line.sku.toUpperCase());
-    if (!sap || Number(sap.teorico) === Number(line.teorico)) continue;
+    if (!sap) continue;
+    const sameTeorico = Number(sap.teorico) === Number(line.teorico);
+    const sameCosto = Number(sap.costo ?? 0) === Number(line.costo ?? 0);
+    if (sameTeorico && sameCosto) continue;
     const { error } = await supabase
       .from("cnt_conteo_lineas")
-      .update({ teorico: sap.teorico, nombre: sap.nombre, um: sap.um })
+      .update({ teorico: sap.teorico, nombre: sap.nombre, um: sap.um, costo: sap.costo ?? 0 })
       .eq("id_conteo", conteoId)
       .eq("sku", line.sku);
     if (error) throw error;
@@ -173,6 +177,19 @@ export async function fetchSession(
   let lines = await linesFor(supabase, id);
   if (row.kind === "semanal" && row.status !== "enviado" && options.syncCatalog) {
     lines = await syncWeeklyLines(supabase, id, row.id_sucursal, lines);
+  }
+  // Backfill unit cost for MONTO even on already-captured / enviado lines.
+  if (lines.some((line) => !(line.costo && line.costo > 0))) {
+    try {
+      const productos = await fetchProductos(supabase, row.id_sucursal);
+      const bySku = new Map(productos.map((p) => [p.sku.toUpperCase(), p.costo ?? 0]));
+      lines = lines.map((line) => ({
+        ...line,
+        costo: line.costo && line.costo > 0 ? line.costo : bySku.get(line.sku.toUpperCase()) ?? 0,
+      }));
+    } catch {
+      /* costo stays 0 if inventory unavailable */
+    }
   }
   const retention = row.kind === "urgente" ? await evidenceRetentionDays(supabase) : undefined;
   return mapSession(row, lines, { evidenceRetentionDays: retention });

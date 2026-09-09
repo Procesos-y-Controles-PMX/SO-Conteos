@@ -17,7 +17,7 @@ import {
   writePreferredQtyMode,
   type QtyMode,
 } from "@/lib/conteos/qtyMode";
-import type { CountLine, CountSession } from "@/lib/types";
+import type { CountLine, CountSession, EvidenceKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { weekLabel } from "@/lib/week";
 
@@ -49,7 +49,7 @@ export default function SkuStepper({
   index: number;
   onIndex: (next: number) => void;
   onPatch: (sku: string, patch: Partial<CountLine>) => void;
-  onEvidence?: (sku: string, file: File) => Promise<void>;
+  onEvidence?: (sku: string, file: File, kind?: EvidenceKind) => Promise<void>;
   onFinish: () => void;
 }) {
   const line = session.lines[index];
@@ -91,11 +91,10 @@ export default function SkuStepper({
     );
   }
 
-  const hasPending =
-    (line.pendienteEntregar ?? 0) > 0 || (line.pendienteFacturar ?? 0) > 0;
-  const showEvidence = session.kind === "urgente" || session.kind === "semanal";
-  const requireEvidence =
-    session.kind === "urgente" || (session.kind === "semanal" && hasPending);
+  const hasPendEntregar = (line.pendienteEntregar ?? 0) > 0;
+  const hasPendFacturar = (line.pendienteFacturar ?? 0) > 0;
+  const showWeeklyEvidence = session.kind === "semanal";
+  const showUrgentEvidence = session.kind === "urgente";
   const last = index >= total - 1;
   const counted = session.lines.filter((l) => l.fisico != null).length;
   const bagKg = bagKgFromName(line.nombre);
@@ -119,16 +118,67 @@ export default function SkuStepper({
     if (line.fisico == null) {
       onPatch(line.sku, { fisico: 0 });
     }
-    if (requireEvidence && !line.evidenciaPath) {
-      toast.error(
-        session.kind === "semanal"
-          ? "Adjunta foto de la mercancía pendiente de entregar o facturar."
-          : "Adjunta foto o video de este producto.",
-      );
+    if (showUrgentEvidence && !line.evidenciaPath) {
+      toast.error("Adjunta foto o video de este producto.");
+      return;
+    }
+    if (showWeeklyEvidence && hasPendEntregar && !line.evidenciaEntregarPath) {
+      toast.error("Adjunta evidencia de pendiente por entregar.");
+      return;
+    }
+    if (showWeeklyEvidence && hasPendFacturar && !line.evidenciaFacturarPath) {
+      toast.error("Adjunta evidencia de pendiente por facturar.");
       return;
     }
     if (last) onFinish();
     else onIndex(index + 1);
+  }
+
+  function EvidenceSlot({
+    kind,
+    label,
+    attachedName,
+    attachedPath,
+  }: {
+    kind: EvidenceKind;
+    label: string;
+    attachedName?: string;
+    attachedPath?: string;
+  }) {
+    return (
+      <div className="mt-3">
+        <p className="field-label mb-1">{label}</p>
+        <p className="mb-2 text-[11px] leading-relaxed text-fg-subtle">
+          En caso de ser mayor a 0, adjunta la evidencia.
+        </p>
+        <label className="neu-button flex min-h-11 cursor-pointer items-center gap-3 rounded-sm px-4 py-3 text-sm text-fg">
+          <Camera className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 truncate">
+            {uploading
+              ? "Subiendo evidencia…"
+              : attachedPath
+                ? attachedName || "Evidencia adjunta"
+                : "Adjuntar evidencia"}
+          </span>
+          <input
+            type="file"
+            accept="image/*,video/*"
+            capture="environment"
+            className="hidden"
+            disabled={uploading || !onEvidence}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file || !onEvidence) return;
+              setUploading(true);
+              void onEvidence(line.sku, file, kind)
+                .catch((err: Error) => toast.error(err.message || "No se pudo subir."))
+                .finally(() => setUploading(false));
+            }}
+          />
+        </label>
+      </div>
+    );
   }
 
   return (
@@ -225,13 +275,31 @@ export default function SkuStepper({
           />
         </div>
 
-        {showEvidence ? (
+        {showWeeklyEvidence ? (
+          <div className="mt-5 space-y-1">
+            <EvidenceSlot
+              kind="entregar"
+              label="Pendiente entregar — evidencia"
+              attachedName={line.evidenciaEntregar}
+              attachedPath={line.evidenciaEntregarPath}
+            />
+            <EvidenceSlot
+              kind="facturar"
+              label="Pendiente facturar — evidencia"
+              attachedName={line.evidenciaFacturar}
+              attachedPath={line.evidenciaFacturarPath}
+            />
+            <p className="mt-2 text-center text-[11px] text-fg-faint">
+              Se borra sola a los {session.evidenceRetentionDays ?? 14} días.
+            </p>
+          </div>
+        ) : null}
+
+        {showUrgentEvidence ? (
           <div className="mt-5">
             <p className="field-label mb-1.5">Evidencia fotográfica</p>
             <p className="mb-3 text-[11px] leading-relaxed text-fg-subtle">
-              {session.kind === "semanal"
-                ? "Si capturaste pendiente de entregar o facturar, adjunta una foto clara de esa mercancía (etiquetas/ubicación visibles)."
-                : "Adjunta foto o video del producto contado. Se borra sola a los días configurados."}
+              En caso de ser mayor a 0, adjunta la evidencia.
             </p>
             <label className="neu-button flex min-h-11 cursor-pointer items-center gap-3 rounded-sm px-4 py-3 text-sm text-fg">
               <Camera className="h-4 w-4 shrink-0" />
@@ -240,9 +308,7 @@ export default function SkuStepper({
                   ? "Subiendo evidencia…"
                   : line.evidenciaPath
                     ? line.evidencia || "Evidencia adjunta"
-                    : requireEvidence
-                      ? "Adjuntar foto (requerido)"
-                      : "Adjuntar foto (opcional)"}
+                    : "Adjuntar evidencia"}
               </span>
               <input
                 type="file"
@@ -255,7 +321,7 @@ export default function SkuStepper({
                   e.target.value = "";
                   if (!file || !onEvidence) return;
                   setUploading(true);
-                  void onEvidence(line.sku, file)
+                  void onEvidence(line.sku, file, "general")
                     .catch((err: Error) => toast.error(err.message || "No se pudo subir."))
                     .finally(() => setUploading(false));
                 }}

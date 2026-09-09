@@ -44,12 +44,8 @@ export default function AdminCountReview({
             </p>
           ) : null}
         </div>
-        <DiffReview
-          session={session}
-          comentario={session.comentario ?? ""}
-          onComentario={() => undefined}
-          readOnly
-        />
+        <DiffReview session={session} mode="diferencias" readOnly />
+        <DiffReview session={session} mode="captura" readOnly />
         <button type="button" className="btn-secondary w-full" onClick={() => router.push("/admin")}>
           Volver al semáforo
         </button>

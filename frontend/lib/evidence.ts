@@ -47,9 +47,15 @@ export function safeEvidenceSku(sku: string) {
   return sku.trim().replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80) || "sku";
 }
 
-export function evidenceObjectPath(conteoId: string, sku: string, fileName: string) {
+export function evidenceObjectPath(
+  conteoId: string,
+  sku: string,
+  fileName: string,
+  kind: "general" | "entregar" | "facturar" = "general",
+) {
   const ext = (fileName.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8) || "bin";
-  return `${conteoId}/${safeEvidenceSku(sku)}/${crypto.randomUUID()}.${ext}`;
+  const slot = kind === "general" ? "ev" : kind;
+  return `${conteoId}/${safeEvidenceSku(sku)}/${slot}-${crypto.randomUUID()}.${ext}`;
 }
 
 export function evidencePrefix(conteoId: string) {

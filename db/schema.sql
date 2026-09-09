@@ -66,10 +66,20 @@ create table if not exists cnt_conteo_lineas (
   fisico numeric,
   pendiente_entregar numeric default 0,
   pendiente_facturar numeric default 0,
+  costo numeric not null default 0,
+  comentario text,
   evidencia_nombre text,
   evidencia_path text,
   evidencia_at timestamptz,
   evidencia_mime text,
+  evidencia_entregar_nombre text,
+  evidencia_entregar_path text,
+  evidencia_entregar_at timestamptz,
+  evidencia_entregar_mime text,
+  evidencia_facturar_nombre text,
+  evidencia_facturar_path text,
+  evidencia_facturar_at timestamptz,
+  evidencia_facturar_mime text,
   unique (id_conteo, sku)
 );
 

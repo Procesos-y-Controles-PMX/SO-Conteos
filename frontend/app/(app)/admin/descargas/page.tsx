@@ -1,19 +1,25 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
 import SelectDropdown from "@/components/ui/SelectDropdown";
 import { listSucursales, sessionsForWeek, deleteConteo } from "@/lib/store";
-import { lineDiff, type CountSession, type Sucursal } from "@/lib/types";
+import { lineDiff, lineMonto, type CountLine, type CountSession, type Sucursal } from "@/lib/types";
 import { cn, downloadTextFile, formatNumber } from "@/lib/utils";
 import { nearbyWeekKeys, weekLabel } from "@/lib/week";
 
 function qtyCell(value: number | null | undefined) {
   if (value == null) return "—";
   return formatNumber(Number(value), 2);
+}
+
+function montoCell(line: CountLine) {
+  const monto = lineMonto(line);
+  if (monto == null) return "—";
+  return formatNumber(monto, 2);
 }
 
 export default function DescargasPage() {
@@ -26,6 +32,11 @@ export default function DescargasPage() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [commentLine, setCommentLine] = useState<{
+    sku: string;
+    nombre: string;
+    texto: string;
+  } | null>(null);
 
   useEffect(() => {
     void listSucursales().then(setSucursales);
@@ -56,19 +67,22 @@ export default function DescargasPage() {
       "contador",
       "puesto",
       "sku",
-      "producto",
+      "material",
       "um",
-      "teorico",
-      "fisico",
-      "pend_entregar",
-      "pend_facturar",
-      "diferencia",
-      "comentario",
+      "inv_fisico",
+      "inv_teorico",
+      "por_entrega",
+      "por_facturar",
+      "dif",
+      "monto",
+      "comentarios",
     ];
     const lines = [header.join(",")];
     for (const session of rows) {
       const suc = sucursales.find((s) => s.id === session.sucursalId);
       for (const line of session.lines) {
+        const diff = lineDiff(line);
+        const monto = lineMonto(line);
         lines.push(
           [
             session.weekKey,
@@ -79,14 +93,15 @@ export default function DescargasPage() {
             session.counterName ?? "",
             session.counterPuesto ?? "",
             line.sku,
-            `"${line.nombre}"`,
+            `"${line.nombre.replaceAll('"', '""')}"`,
             line.um,
-            line.teorico,
             line.fisico ?? "",
+            line.teorico,
             line.pendienteEntregar ?? "",
             line.pendienteFacturar ?? "",
-            lineDiff(line) ?? "",
-            `"${(session.comentario ?? "").replaceAll('"', '""')}"`,
+            diff ?? "",
+            monto ?? "",
+            `"${(line.comentario ?? "").replaceAll('"', '""')}"`,
           ].join(","),
         );
       }
@@ -209,25 +224,28 @@ export default function DescargasPage() {
                               <thead>
                                 <tr className="text-[10px] font-bold uppercase tracking-wider text-fg-faint">
                                   <th className="px-2 py-2">SKU</th>
-                                  <th className="px-2 py-2">Producto</th>
+                                  <th className="px-2 py-2">Material</th>
                                   <th className="px-2 py-2">UM</th>
-                                  <th className="px-2 py-2 text-right">Teórico</th>
-                                  <th className="px-2 py-2 text-right">Físico</th>
-                                  <th className="px-2 py-2 text-right">Pend. ent.</th>
-                                  <th className="px-2 py-2 text-right">Pend. fact.</th>
-                                  <th className="px-2 py-2 text-right">Diff</th>
+                                  <th className="px-2 py-2 text-right">Inv. físico</th>
+                                  <th className="px-2 py-2 text-right">Inv. teórico</th>
+                                  <th className="px-2 py-2 text-right">Por entrega</th>
+                                  <th className="px-2 py-2 text-right">Por facturar</th>
+                                  <th className="px-2 py-2 text-right">Dif.</th>
+                                  <th className="px-2 py-2 text-right">Monto</th>
+                                  <th className="px-2 py-2 text-center">Comentarios</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {session.lines.map((line) => {
                                   const diff = lineDiff(line);
+                                  const monto = lineMonto(line);
                                   return (
                                     <tr key={line.sku} className="border-t border-line-subtle">
                                       <td className="px-2 py-2 font-mono tabular-nums">{line.sku}</td>
-                                      <td className="px-2 py-2">{line.nombre}</td>
+                                      <td className="max-w-[12rem] truncate px-2 py-2">{line.nombre}</td>
                                       <td className="px-2 py-2">{line.um}</td>
-                                      <td className="px-2 py-2 text-right tabular-nums">{qtyCell(line.teorico)}</td>
                                       <td className="px-2 py-2 text-right tabular-nums">{qtyCell(line.fisico)}</td>
+                                      <td className="px-2 py-2 text-right tabular-nums">{qtyCell(line.teorico)}</td>
                                       <td className="px-2 py-2 text-right tabular-nums">
                                         {qtyCell(line.pendienteEntregar)}
                                       </td>
@@ -246,17 +264,44 @@ export default function DescargasPage() {
                                       >
                                         {diff == null ? "—" : `${diff > 0 ? "+" : ""}${formatNumber(diff, 2)}`}
                                       </td>
+                                      <td
+                                        className={cn(
+                                          "px-2 py-2 text-right font-semibold tabular-nums",
+                                          (monto ?? 0) < 0
+                                            ? "text-brand"
+                                            : (monto ?? 0) > 0
+                                              ? "text-emerald-600"
+                                              : "text-fg",
+                                        )}
+                                      >
+                                        {montoCell(line)}
+                                      </td>
+                                      <td className="px-2 py-2 text-center">
+                                        {line.comentario?.trim() ? (
+                                          <button
+                                            type="button"
+                                            className="neu-button inline-flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] font-semibold text-fg"
+                                            onClick={() =>
+                                              setCommentLine({
+                                                sku: line.sku,
+                                                nombre: line.nombre,
+                                                texto: line.comentario!.trim(),
+                                              })
+                                            }
+                                          >
+                                            <MessageSquare className="h-3.5 w-3.5" />
+                                            Ver
+                                          </button>
+                                        ) : (
+                                          <span className="text-fg-faint">—</span>
+                                        )}
+                                      </td>
                                     </tr>
                                   );
                                 })}
                               </tbody>
                             </table>
                           </div>
-                          {session.comentario ? (
-                            <p className="mt-3 text-sm text-fg-subtle">
-                              <span className="font-semibold text-fg">Comentario:</span> {session.comentario}
-                            </p>
-                          ) : null}
                         </td>
                       </tr>
                     ) : null}
@@ -285,6 +330,15 @@ export default function DescargasPage() {
             .catch((err: Error) => toast.error(err.message))
             .finally(() => setDeleting(false));
         }}
+      />
+      <ConfirmDialog
+        open={Boolean(commentLine)}
+        title={commentLine ? `${commentLine.sku} · ${commentLine.nombre}` : "Comentario"}
+        body={commentLine?.texto ?? ""}
+        confirmLabel="Cerrar"
+        cancelLabel="Cerrar"
+        onCancel={() => setCommentLine(null)}
+        onConfirm={() => setCommentLine(null)}
       />
     </div>
   );
