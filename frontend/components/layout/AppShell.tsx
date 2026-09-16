@@ -20,6 +20,7 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import { isConteosAdmin, isMajorAdmin, sessionRoleLabel } from "@/lib/access";
+import { useCustomAmbientNoise } from "@/lib/ambient-noise";
 import { goToLogin, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +50,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
+  const customField = useCustomAmbientNoise(user?.email);
+
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
@@ -74,8 +77,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
-  /** Only the Administrador general gets the animated field; the rest get flat. */
-  const ambientAnimated = isMajorAdmin(user);
+  const ambientAnimated = isMajorAdmin(user) || Boolean(customField);
 
   const isCountSession = /^\/conteos\/[^/]+$/.test(pathname);
 
@@ -199,10 +201,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
         {ambientAnimated ? (
           <div className="app-grid-tile pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
             <NoiseField
-              key={mounted ? resolvedTheme : "light"}
+              key={mounted ? `${resolvedTheme}-${customField ? "custom" : "default"}` : "light"}
               className="absolute inset-0"
               color={resolvedTheme === "light" ? [52, 80, 122] : [255, 255, 255]}
               maxOpacity={resolvedTheme === "light" ? 0.7 : 0.5}
+              {...customField}
             />
           </div>
         ) : (
