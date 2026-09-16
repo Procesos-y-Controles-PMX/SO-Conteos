@@ -20,7 +20,7 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import { isConteosAdmin, isMajorAdmin, sessionRoleLabel } from "@/lib/access";
-import { useCustomAmbientNoise } from "@/lib/ambient-noise";
+import { useAmbientBrand, useCustomAmbientNoise } from "@/lib/ambient-noise";
 import { goToLogin, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +51,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
   const customField = useCustomAmbientNoise(user?.email);
+  useAmbientBrand(customField?.color);
 
   useEffect(() => setMounted(true), []);
 
