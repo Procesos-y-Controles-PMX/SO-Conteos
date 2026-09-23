@@ -10,7 +10,6 @@ import {
   canCountBags,
   conversionCaption,
   fromDisplay,
-  pesoStep,
   readPreferredQtyMode,
   toDisplay,
   unitHint,
@@ -100,14 +99,12 @@ export default function SkuStepper({
   const bagKg = bagKgFromName(line.nombre);
   const bags = canCountBags(line.nombre, line.um);
   const mode: QtyMode = bags ? qtyMode : "peso";
-  const step = bags && bagKg != null ? (mode === "sacos" ? 1 : pesoStep(line.um, bagKg)) : 1;
 
   function bindQty(stored: number | null, patch: (next: number | null) => void) {
     return {
       hint: bags && mode === "sacos" ? "SACOS" : line.um,
       value: bags && bagKg != null ? toDisplay(stored, line.um, mode, bagKg) : stored,
       caption: bags && bagKg != null ? conversionCaption(stored, line.um, mode, bagKg) : undefined,
-      step,
       onChange: (next: number | null) => {
         patch(bags && bagKg != null ? fromDisplay(next, line.um, mode, bagKg) : next);
       },
@@ -151,7 +148,7 @@ export default function SkuStepper({
         <p className="mb-2 text-[11px] leading-relaxed text-fg-subtle">
           En caso de ser mayor a 0, adjunta la evidencia.
         </p>
-        <label className="neu-button flex min-h-11 cursor-pointer items-center gap-3 rounded-sm px-4 py-3 text-sm text-fg">
+        <label className="neu-button flex min-h-11 cursor-pointer items-center gap-2 rounded-sm px-3 py-2.5 text-xs text-fg">
           <Camera className="h-4 w-4 shrink-0" />
           <span className="min-w-0 truncate">
             {uploading
@@ -251,7 +248,7 @@ export default function SkuStepper({
           </div>
         ) : null}
 
-        <div className="mt-5">
+        <div className="mt-5 rounded-md border-l-[3px] border-steel bg-[var(--steel-tint)] p-4">
           <QuantityField
             key={`${line.sku}-${mode}`}
             size="lg"
@@ -262,38 +259,38 @@ export default function SkuStepper({
           />
         </div>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <QuantityField
-            key={`${line.sku}-${mode}-pe`}
-            label="Pendiente entregar"
-            {...bindQty(line.pendienteEntregar, (pendienteEntregar) => onPatch(line.sku, { pendienteEntregar }))}
-          />
-          <QuantityField
-            key={`${line.sku}-${mode}-pf`}
-            label="Pendiente facturar"
-            {...bindQty(line.pendienteFacturar, (pendienteFacturar) => onPatch(line.sku, { pendienteFacturar }))}
-          />
-        </div>
-
-        {showWeeklyEvidence ? (
-          <div className="mt-5 space-y-1">
-            <EvidenceSlot
-              kind="entregar"
-              label="Pendiente entregar — evidencia"
-              attachedName={line.evidenciaEntregar}
-              attachedPath={line.evidenciaEntregarPath}
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4">
+          <div>
+            <QuantityField
+              key={`${line.sku}-${mode}-pe`}
+              label="Pendiente entregar"
+              {...bindQty(line.pendienteEntregar, (pendienteEntregar) => onPatch(line.sku, { pendienteEntregar }))}
             />
-            <EvidenceSlot
-              kind="facturar"
-              label="Pendiente facturar — evidencia"
-              attachedName={line.evidenciaFacturar}
-              attachedPath={line.evidenciaFacturarPath}
-            />
-            <p className="mt-2 text-center text-[11px] text-fg-faint">
-              Se borra sola a los {session.evidenceRetentionDays ?? 14} días.
-            </p>
+            {showWeeklyEvidence ? (
+              <EvidenceSlot
+                kind="entregar"
+                label="Evidencia"
+                attachedName={line.evidenciaEntregar}
+                attachedPath={line.evidenciaEntregarPath}
+              />
+            ) : null}
           </div>
-        ) : null}
+          <div>
+            <QuantityField
+              key={`${line.sku}-${mode}-pf`}
+              label="Pendiente facturar"
+              {...bindQty(line.pendienteFacturar, (pendienteFacturar) => onPatch(line.sku, { pendienteFacturar }))}
+            />
+            {showWeeklyEvidence ? (
+              <EvidenceSlot
+                kind="facturar"
+                label="Evidencia"
+                attachedName={line.evidenciaFacturar}
+                attachedPath={line.evidenciaFacturarPath}
+              />
+            ) : null}
+          </div>
+        </div>
 
         {showUrgentEvidence ? (
           <div className="mt-5">
@@ -327,9 +324,6 @@ export default function SkuStepper({
                 }}
               />
             </label>
-            <p className="mt-2 text-center text-[11px] text-fg-faint">
-              Se borra sola a los {session.evidenceRetentionDays ?? 14} días.
-            </p>
           </div>
         ) : null}
       </article>

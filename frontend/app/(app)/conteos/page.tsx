@@ -5,16 +5,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CalendarClock, ChevronRight, Siren } from "lucide-react";
 import SemaforoDot from "@/components/conteos/SemaforoDot";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
 import { useAuth } from "@/lib/auth";
 import { getInventario, sessionsForSucursal, weeklySessionFor } from "@/lib/store";
 import { countProgress, sessionSemaforo, type CountSession, type InventarioMeta } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
 import { weekKeyFromDate, weekLabel } from "@/lib/week";
-
-const START_WARNING =
-  "¿Está seguro de que desea continuar con el proceso? Una vez iniciado, deberá completarse hasta el final.";
 
 export default function ConteosHubPage() {
   const router = useRouter();
@@ -25,7 +21,6 @@ export default function ConteosHubPage() {
   const [inventario, setInventario] = useState<InventarioMeta | null>(null);
   const [skuCount, setSkuCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [confirmStart, setConfirmStart] = useState(false);
 
   useEffect(() => {
     if (!sucursalId) return;
@@ -48,13 +43,8 @@ export default function ConteosHubPage() {
   const urgentePendiente = urgentesPendientes[0] ?? urgentes[0];
   const weeklyProgress = weekly ? countProgress(weekly) : { filled: 0, total: skuCount };
   const weeklyHref = weekly ? `/conteos/${weekly.id}` : "/conteos/semanales";
-  const needsStartWarning = Boolean(weekly && weekly.status === "pendiente");
 
   function openWeekly() {
-    if (needsStartWarning) {
-      setConfirmStart(true);
-      return;
-    }
     router.push(weeklyHref);
   }
 
@@ -139,19 +129,6 @@ export default function ConteosHubPage() {
           </p>
         </Link>
       </div>
-
-      <ConfirmDialog
-        open={confirmStart}
-        title="Iniciar conteo"
-        body={START_WARNING}
-        confirmLabel="Continuar"
-        cancelLabel="Cancelar"
-        onCancel={() => setConfirmStart(false)}
-        onConfirm={() => {
-          setConfirmStart(false);
-          router.push(weeklyHref);
-        }}
-      />
     </div>
   );
 }

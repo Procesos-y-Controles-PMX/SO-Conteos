@@ -21,6 +21,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import { isConteosAdmin, isMajorAdmin, sessionRoleLabel } from "@/lib/access";
 import { useAmbientBrand, useCustomAmbientNoise } from "@/lib/ambient-noise";
+import { useCountInProgress } from "@/lib/conteos/countLock";
 import { goToLogin, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +54,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const customField = useCustomAmbientNoise(user?.email);
   useAmbientBrand(customField?.color);
 
+  const countInProgress = useCountInProgress();
+
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
@@ -82,7 +85,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   const isCountSession = /^\/conteos\/[^/]+$/.test(pathname);
 
+  const logoutTitle = countInProgress ? "Termina el conteo para cerrar sesión" : "Cerrar sesión";
+
   function handleLogout() {
+    if (countInProgress) return;
     goToLogin();
   }
 
@@ -164,8 +170,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 onClick={handleLogout}
-                title="Cerrar sesión"
-                className="neu-button inline-flex h-9 w-9 items-center justify-center rounded-full text-fg-subtle hover:text-fg"
+                disabled={countInProgress}
+                title={logoutTitle}
+                className="neu-button inline-flex h-9 w-9 items-center justify-center rounded-full text-fg-subtle hover:text-fg disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:text-fg-subtle"
               >
                 <LogOut className="h-4 w-4" />
               </button>
@@ -183,7 +190,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="neu-button flex w-full items-center justify-center gap-2 rounded-sm px-3 py-2 text-[12px] font-medium text-fg-muted hover:text-fg"
+                disabled={countInProgress}
+                title={logoutTitle}
+                className="neu-button flex w-full items-center justify-center gap-2 rounded-sm px-3 py-2 text-[12px] font-medium text-fg-muted hover:text-fg disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:text-fg-muted"
               >
                 <LogOut className="h-4 w-4" />
                 Salir
@@ -225,7 +234,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
             <button
               type="button"
               onClick={handleLogout}
-              className="neu-button inline-flex h-9 items-center justify-center rounded-sm px-3 text-xs font-semibold text-fg"
+              disabled={countInProgress}
+              title={logoutTitle}
+              className="neu-button inline-flex h-9 items-center justify-center rounded-sm px-3 text-xs font-semibold text-fg disabled:cursor-not-allowed disabled:opacity-45"
             >
               Salir
             </button>

@@ -13,14 +13,22 @@ import PageHeader from "@/components/ui/PageHeader";
 import { isConteosAdmin } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { deleteConteo, getSession, patchLine, patchSession, submitSession, uploadEvidence } from "@/lib/store";
+import { setCountInProgress } from "@/lib/conteos/countLock";
 import { scopeWeeklySession } from "@/lib/catalog/polvos";
 import { countProgress, lineDiff, type CountLine, type CountSession, type EvidenceKind } from "@/lib/types";
 import { weekLabel } from "@/lib/week";
 
 type Step = "identidad" | "conteo" | "revision" | "revision_diffs" | "enviado";
 
-const START_WARNING =
-  "¿Está seguro de que desea continuar con el proceso? Una vez iniciado, deberá completarse hasta el final.";
+const START_WARNING = (
+  <>
+    ¿Está seguro de que desea continuar con el proceso? Una vez iniciado, deberá completarse hasta el final.
+    <span className="mt-2 block">
+      Si tiene pendientes por entregar o por facturar, tenga a la mano las evidencias correspondientes antes de
+      iniciar el conteo.
+    </span>
+  </>
+);
 
 function saveErrorMessage(err: unknown) {
   const msg = err instanceof Error ? err.message : "";
@@ -104,6 +112,13 @@ export default function CountSessionPage() {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
   }, []);
+
+  const countRunning = step === "conteo" || step === "revision" || step === "revision_diffs";
+
+  useEffect(() => {
+    setCountInProgress(countRunning);
+    return () => setCountInProgress(false);
+  }, [countRunning]);
 
   if (missing) return <p className="text-sm text-fg-subtle">No se encontró este conteo.</p>;
   if (!session) return <p className="text-sm text-fg-subtle">Cargando…</p>;
@@ -206,23 +221,8 @@ export default function CountSessionPage() {
     toast.success("Conteo enviado.");
   }
 
+  /** Solo vive en el paso de identidad: una vez iniciado el conteo ya no se puede regresar. */
   function handleRegresar() {
-    if (locked || step === "enviado") {
-      router.push("/conteos");
-      return;
-    }
-    if (step === "revision_diffs") {
-      setStep("revision");
-      return;
-    }
-    if (step === "revision") {
-      setStep("conteo");
-      return;
-    }
-    if (step === "conteo" && safeIndex > 0) {
-      setSkuIndex(safeIndex - 1);
-      return;
-    }
     router.push(hubHref === "/conteos/urgentes" ? "/conteos" : hubHref);
   }
 
@@ -253,7 +253,7 @@ export default function CountSessionPage() {
 
   return (
     <div>
-      {!locked ? (
+      {step === "identidad" ? (
         <div className="mb-4">
           <button type="button" className="btn-secondary min-h-10 gap-2 px-3 text-sm" onClick={handleRegresar}>
             <ArrowLeft className="h-4 w-4" />

@@ -1,14 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Minus, Plus } from "lucide-react";
-import {
-  formatQtyInput,
-  insertDecimal,
-  parseQtyDraft,
-  roundQty,
-  sanitizeQtyDraft,
-} from "@/lib/conteos/qtyMode";
+import { formatQtyInput, parseQtyDraft, sanitizeQtyDraft } from "@/lib/conteos/qtyMode";
 import { cn } from "@/lib/utils";
 
 export default function QuantityField({
@@ -18,22 +11,20 @@ export default function QuantityField({
   value,
   onChange,
   onCommit,
-  step = 1,
   size = "md",
   autoFocus,
 }: {
   label: string;
+  /** Unidad de medida: se muestra a la derecha del cuadro de texto. */
   hint?: string;
   caption?: string;
   value: number | null;
   onChange: (next: number | null) => void;
   onCommit?: () => void;
-  step?: number;
   size?: "lg" | "md";
   autoFocus?: boolean;
 }) {
   const large = size === "lg";
-  const current = value ?? 0;
   const [draft, setDraft] = useState<string | null>(null);
 
   function shown() {
@@ -58,16 +49,6 @@ export default function QuantityField({
     }
   }
 
-  function bump(delta: number) {
-    setDraft(null);
-    onChange(Math.max(0, roundQty(current + delta)));
-  }
-
-  function addDecimal() {
-    const next = insertDecimal(shown());
-    applyDraft(next, true);
-  }
-
   function commitAndMaybeNext() {
     const parsed = parseQtyDraft(shown());
     if (parsed != null) onChange(parsed);
@@ -78,23 +59,15 @@ export default function QuantityField({
 
   return (
     <div className="block">
-      <span className="mb-2 flex items-baseline justify-between gap-2">
-        <span className="field-label">{label}</span>
-        {hint ? <span className="font-mono text-[11px] text-fg-faint">{hint}</span> : null}
+      <span
+        className={cn(
+          "mb-2 block",
+          large ? "text-[11px] font-bold uppercase tracking-[0.14em] text-fg" : "field-label",
+        )}
+      >
+        {label}
       </span>
       <div className="flex items-stretch gap-2">
-        <button
-          type="button"
-          className={cn(
-            "neu-button flex shrink-0 items-center justify-center rounded-sm text-fg",
-            large ? "h-11 w-11" : "h-10 w-10",
-          )}
-          aria-label="Restar"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => bump(-step)}
-        >
-          <Minus className="h-4 w-4" strokeWidth={2.4} />
-        </button>
         <input
           type="text"
           inputMode="decimal"
@@ -104,7 +77,7 @@ export default function QuantityField({
           autoFocus={autoFocus}
           className={cn(
             "input-field min-w-0 flex-1 text-center font-mono tabular-nums",
-            large ? "h-11 text-xl font-semibold" : "h-10 text-base",
+            large ? "h-12 text-xl font-semibold" : "h-10 text-base",
           )}
           value={shown()}
           placeholder="0"
@@ -122,30 +95,16 @@ export default function QuantityField({
             }
           }}
         />
-        <button
-          type="button"
-          className={cn(
-            "neu-button flex shrink-0 items-center justify-center rounded-sm font-mono text-fg",
-            large ? "h-11 w-11 text-lg font-semibold" : "h-10 w-10 text-base font-semibold",
-          )}
-          aria-label="Punto decimal"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={addDecimal}
-        >
-          .
-        </button>
-        <button
-          type="button"
-          className={cn(
-            "neu-button flex shrink-0 items-center justify-center rounded-sm text-fg",
-            large ? "h-11 w-11" : "h-10 w-10",
-          )}
-          aria-label="Sumar"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => bump(step)}
-        >
-          <Plus className="h-4 w-4" strokeWidth={2.4} />
-        </button>
+        {hint ? (
+          <span
+            className={cn(
+              "flex shrink-0 items-center justify-center font-mono font-semibold uppercase text-fg-muted",
+              large ? "h-12 min-w-14 text-xs" : "h-10 min-w-12 text-[11px]",
+            )}
+          >
+            {hint}
+          </span>
+        ) : null}
       </div>
       {caption ? <p className="mt-1.5 text-right font-mono text-[11px] tabular-nums text-fg-faint">{caption}</p> : null}
     </div>

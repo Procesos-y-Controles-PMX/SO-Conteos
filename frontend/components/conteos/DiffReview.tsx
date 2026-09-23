@@ -97,9 +97,7 @@ export default function DiffReview({
           </p>
         ) : null}
         {!readOnly && diffs.length > 0 ? (
-          <p className="mt-2 text-sm text-fg-subtle">
-            Explica cada diferencia (positiva o negativa). Sin comentario no se puede enviar.
-          </p>
+          <p className="mt-2 text-sm text-fg-subtle">Explica cada diferencia (positiva o negativa).</p>
         ) : null}
         {!captured ? (
           <p className="mt-2 text-sm text-fg-subtle">Todavía no hay cantidades capturadas.</p>
@@ -134,9 +132,7 @@ export default function DiffReview({
                     )
                   ) : (
                     <label className="mt-2 block">
-                      <span className="field-label mb-1.5 block">
-                        Comentario {missingComment ? "(requerido)" : ""}
-                      </span>
+                      <span className="field-label mb-1.5 block">Comentario</span>
                       <textarea
                         className={cn("input-field min-h-20", missingComment && "ring-1 ring-brand/40")}
                         placeholder="¿Por qué hay esta diferencia?"

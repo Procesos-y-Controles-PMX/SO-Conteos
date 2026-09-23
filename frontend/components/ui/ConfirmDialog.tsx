@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 type Props = {
   open: boolean;
   title: string;
-  body: string;
+  body: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   pending?: boolean;
