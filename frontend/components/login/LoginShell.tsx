@@ -1,8 +1,8 @@
 "use client";
 
-import { NoiseField, ThemeToggle } from "@promexma/ui";
+import { ThemeToggle } from "@promexma/ui";
 import { useTheme } from "next-themes";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import PromexmaLogotipo from "@/components/login/PromexmaLogotipo";
 
 const CLAY_LIGHT = "#e8ecf3";
@@ -54,21 +54,14 @@ export default function LoginShell({
   children: ReactNode;
 }) {
   const { resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
   const isDark = resolvedTheme !== "light";
   useLoginChromeTheme(isDark);
 
   return (
-    <div className="app-canvas relative min-h-dvh overflow-hidden text-fg">
-      <div className="app-grid-tile pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
-        <NoiseField
-          key={mounted ? resolvedTheme : "dark"}
-          className="absolute inset-0"
-          color={isDark ? [255, 255, 255] : [52, 80, 122]}
-          maxOpacity={isDark ? 0.5 : 0.7}
-        />
-      </div>
+    <div
+      className="relative min-h-dvh overflow-hidden text-fg"
+      style={{ backgroundColor: isDark ? CLAY_DARK : CLAY_LIGHT }}
+    >
 
       <div className="pointer-events-auto absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-30 lg:right-8">
         <ThemeToggle />

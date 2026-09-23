@@ -1,6 +1,6 @@
 "use client";
 
-import { GridThemeToggle, NoiseField, ThemeToggle } from "@promexma/ui";
+import { GridThemeToggle, ThemeToggle } from "@promexma/ui";
 import {
   Bell,
   ClipboardList,
@@ -14,13 +14,11 @@ import {
   Users,
 } from "lucide-react";
 import Image from "next/image";
-import { useTheme } from "next-themes";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
-import { isConteosAdmin, isMajorAdmin, sessionRoleLabel } from "@/lib/access";
-import { useAmbientBrand, useCustomAmbientNoise } from "@/lib/ambient-noise";
+import { isConteosAdmin, sessionRoleLabel } from "@/lib/access";
 import { useCountInProgress } from "@/lib/conteos/countLock";
 import { goToLogin, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -48,15 +46,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "";
   const { user, loading } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const { resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  const customField = useCustomAmbientNoise(user?.email);
-  useAmbientBrand(customField?.color);
 
   const countInProgress = useCountInProgress();
-
-  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!loading && !user) goToLogin();
@@ -80,8 +71,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </div>
     );
   }
-
-  const ambientAnimated = isMajorAdmin(user) || Boolean(customField);
 
   const isCountSession = /^\/conteos\/[^/]+$/.test(pathname);
 
@@ -208,22 +197,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
           sidebarCollapsed && "lg:ml-[72px]",
         )}
       >
-        {ambientAnimated ? (
-          <div className="app-grid-tile pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
-            <NoiseField
-              key={mounted ? `${resolvedTheme}-${customField ? "custom" : "default"}` : "light"}
-              className="absolute inset-0"
-              color={resolvedTheme === "light" ? [52, 80, 122] : [255, 255, 255]}
-              maxOpacity={resolvedTheme === "light" ? 0.7 : 0.5}
-              {...customField}
-            />
-          </div>
-        ) : (
-          <div
-            className="pointer-events-none absolute inset-0 z-0 bg-[var(--ambient-flat)]"
-            aria-hidden
-          />
-        )}
+        <div
+          className="pointer-events-none absolute inset-0 z-0 bg-[var(--ambient-flat)]"
+          aria-hidden
+        />
         <header className="app-safe-x z-30 flex shrink-0 items-center justify-between gap-2 bg-transparent py-3 lg:hidden">
           <div className="min-w-0">
             <p className="truncate font-display text-sm font-semibold text-fg">SO Conteos</p>
