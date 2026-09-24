@@ -186,12 +186,19 @@ export async function PUT(request: Request, { params }: Params) {
     if (!pathForConteo(id, path)) return fail("Ruta inválida.");
 
     const col = pathColumn(kind);
-    const { data: existing } = await resolved.supabase
+    const { data: existing, error: lineError } = await resolved.supabase
       .from("cnt_conteo_lineas")
-      .select(col)
+      .select("sku, evidencia_path, evidencia_entregar_path, evidencia_facturar_path")
       .eq("id_conteo", id)
       .eq("sku", sku)
       .maybeSingle();
+    if (lineError) {
+      console.error("evidencia put select", lineError);
+      if (/evidencia_/i.test(lineError.message)) {
+        return fail("Falta la columna de evidencia en la base. Corre db/patch-evidencia.sql.", 500);
+      }
+      throw lineError;
+    }
     if (!existing) return fail("Esa línea no existe.", 404);
 
     const at = new Date().toISOString();
@@ -202,7 +209,13 @@ export async function PUT(request: Request, { params }: Params) {
       .update(metaColumns(kind, path, fileName, mime))
       .eq("id_conteo", id)
       .eq("sku", sku);
-    if (error) throw error;
+    if (error) {
+      console.error("evidencia put update", error);
+      if (/evidencia_/i.test(error.message)) {
+        return fail("Falta la columna de evidencia en la base. Corre db/patch-evidencia.sql.", 500);
+      }
+      throw error;
+    }
 
     await resolved.supabase.from("cnt_conteos").update({ status: "en_progreso" }).eq("id", id).eq("status", "pendiente");
 

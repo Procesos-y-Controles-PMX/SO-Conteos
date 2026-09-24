@@ -119,6 +119,51 @@ export default function SkuStepper({
   const fisico = line.fisico ?? 0;
   const needsFisicoPhoto = fisico > 0;
 
+  function upload(kind: EvidenceKind, file: File | undefined) {
+    if (!file || !onEvidence) return;
+    setUploading(true);
+    void onEvidence(line.sku, file, kind)
+      .then(() => toast.success("Evidencia guardada."))
+      .catch((err: Error) => toast.error(err.message || "No se pudo subir."))
+      .finally(() => setUploading(false));
+  }
+
+  useEffect(() => {
+    function onPaste(e: ClipboardEvent) {
+      if (uploading || !onEvidence) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      let file: File | null = null;
+      for (const item of Array.from(items)) {
+        if (!item.type.startsWith("image/")) continue;
+        const blob = item.getAsFile();
+        if (!blob) continue;
+        const ext = item.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
+        file = new File([blob], blob.name || `pegado-${Date.now()}.${ext}`, {
+          type: item.type || "image/png",
+        });
+        break;
+      }
+      if (!file) return;
+      if (needsFisicoPhoto || line.evidenciaPath) {
+        e.preventDefault();
+        upload("general", file);
+        return;
+      }
+      if (showWeeklyEvidence && (hasPendEntregar || line.evidenciaEntregarPath)) {
+        e.preventDefault();
+        upload("entregar", file);
+        return;
+      }
+      if (showWeeklyEvidence && (hasPendFacturar || line.evidenciaFacturarPath)) {
+        e.preventDefault();
+        upload("facturar", file);
+      }
+    }
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  });
+
   function goNext() {
     if (line.fisico == null) {
       onPatch(line.sku, { fisico: 0 });
@@ -139,13 +184,17 @@ export default function SkuStepper({
     else onIndex(index + 1);
   }
 
-  function upload(kind: EvidenceKind, file: File | undefined) {
-    if (!file || !onEvidence) return;
-    setUploading(true);
-    void onEvidence(line.sku, file, kind)
-      .then(() => toast.success("Evidencia guardada."))
-      .catch((err: Error) => toast.error(err.message || "No se pudo subir."))
-      .finally(() => setUploading(false));
+  function fileFromClipboard(data: DataTransfer | null): File | null {
+    if (!data) return null;
+    for (const item of Array.from(data.items)) {
+      if (!item.type.startsWith("image/")) continue;
+      const blob = item.getAsFile();
+      if (!blob) continue;
+      const ext = item.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
+      const name = blob.name && blob.name !== "image.png" ? blob.name : `pegado-${Date.now()}.${ext}`;
+      return blob.name ? blob : new File([blob], name, { type: item.type || "image/png" });
+    }
+    return null;
   }
 
   function EvidenceSlot({
@@ -168,9 +217,22 @@ export default function SkuStepper({
     const buttonClass =
       "neu-button min-h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-sm px-3 py-2.5 text-xs font-semibold text-fg";
     return (
-      <div className={className}>
+      <div
+        className={className}
+        tabIndex={0}
+        onPaste={(e) => {
+          if (uploading || !onEvidence) return;
+          const file = fileFromClipboard(e.clipboardData);
+          if (!file) return;
+          e.preventDefault();
+          upload(kind, file);
+        }}
+      >
         <p className="field-label mb-1">{label}</p>
         <p className="mb-2 text-[11px] leading-relaxed text-fg-subtle">{hint}</p>
+        <p className="mb-2 text-[11px] leading-relaxed text-fg-faint">
+          También puedes pegar una foto aquí (Ctrl+V / ⌘V).
+        </p>
         <div className="flex flex-wrap gap-2">
           <label className={cn(buttonClass, "hidden pointer-coarse:flex", uploading && "pointer-events-none opacity-60")}>
             <Camera className="h-4 w-4 shrink-0" />
