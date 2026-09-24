@@ -1,5 +1,5 @@
 import { decodeSpreadsheetBuffer, keepConteoSpreadsheet, parseDelimitedText } from "@/lib/excel/parseInventario";
-import { EVIDENCE_MAX_BYTES, isAllowedEvidenceMime } from "@/lib/evidence";
+import { EVIDENCE_MAX_BYTES, isAllowedEvidenceMime, mimeFromFileName } from "@/lib/evidence";
 import type { SoAccount, SoAccountsSourceStatus } from "@/lib/so-account-types";
 import type { CountKind, CountLine, CountSession, CtzUsuario, InventarioMeta, Producto, SemaforoResumen, Sucursal, ZonaSemaforo } from "@/lib/types";
 
@@ -17,9 +17,14 @@ export type InventarioPayload = {
 };
 
 async function parse<T>(res: Response): Promise<T> {
-  const body = (await res.json()) as T & { ok?: boolean; message?: string };
+  let body: T & { ok?: boolean; message?: string };
+  try {
+    body = (await res.json()) as T & { ok?: boolean; message?: string };
+  } catch {
+    throw new Error(`Error de servidor (${res.status}).`);
+  }
   if (!res.ok || body.ok === false) {
-    throw new Error(body.message ?? "Error de servidor.");
+    throw new Error(body.message ?? `Error de servidor (${res.status}).`);
   }
   return body;
 }
@@ -152,7 +157,18 @@ export async function weeklySessionFor(sucursalId: string, weekKey?: string) {
   return data.session;
 }
 
-export async function patchSession(id: string, patch: Partial<CountSession>) {
+export async function unlockWeek(sucursalId: string, weekKey: string, por: string) {
+  const data = await parse<{ session: CountSession }>(
+    await fetch("/api/admin/conteos/desbloquear", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sucursalId, weekKey, por }),
+    }),
+  );
+  return data.session;
+}
+
+export async function patchSession(id: string, patch: Partial<CountSession> & { cerrarCaptura?: boolean }) {
   const data = await parse<{ session: CountSession }>(
     await fetch(`/api/conteos/${id}`, {
       method: "PATCH",
@@ -180,11 +196,12 @@ export async function uploadEvidence(
   kind: import("@/lib/types").EvidenceKind = "general",
 ) {
   if (!isAllowedEvidenceMime(file.type, file.name)) {
-    throw new Error("Usa una foto o un video.");
+    throw new Error(`"${file.name}" no es foto ni video. Usa JPG, PNG, HEIC, MP4 o MOV.`);
   }
   if (file.size > EVIDENCE_MAX_BYTES) {
-    throw new Error("El archivo no puede pesar más de 25 MB.");
+    throw new Error(`"${file.name}" pesa ${(file.size / 1024 / 1024).toFixed(1)} MB. El máximo es 25 MB.`);
   }
+  const contentType = file.type || mimeFromFileName(file.name) || "application/octet-stream";
   const signed = await parse<{ path: string; token: string; signedUrl: string }>(
     await fetch(`/api/conteos/${sessionId}/evidencia`, {
       method: "POST",
@@ -192,22 +209,27 @@ export async function uploadEvidence(
       body: JSON.stringify({
         sku,
         fileName: file.name,
-        contentType: file.type,
+        contentType,
         bytes: file.size,
         kind,
       }),
     }),
   );
-  const put = await fetch(signed.signedUrl, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${signed.token}`,
-      "Content-Type": file.type || "application/octet-stream",
-    },
-    body: file,
-  });
-  if (!put.ok) {
+  let put: Response;
+  try {
+    put = await fetch(signed.signedUrl, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${signed.token}`,
+        "Content-Type": contentType,
+      },
+      body: file,
+    });
+  } catch {
     throw new Error("No se pudo subir el archivo. Revisa la conexión.");
+  }
+  if (!put.ok) {
+    throw new Error(`No se pudo subir el archivo (error ${put.status}). Intenta de nuevo.`);
   }
   const saved = await parse<Partial<CountLine> & { saved?: boolean }>(
     await fetch(`/api/conteos/${sessionId}/evidencia`, {
@@ -217,7 +239,7 @@ export async function uploadEvidence(
         sku,
         path: signed.path,
         fileName: file.name,
-        contentType: file.type,
+        contentType,
         kind,
       }),
     }),
@@ -227,7 +249,7 @@ export async function uploadEvidence(
       evidenciaEntregar: saved.evidenciaEntregar ?? file.name,
       evidenciaEntregarPath: saved.evidenciaEntregarPath ?? signed.path,
       evidenciaEntregarAt: saved.evidenciaEntregarAt,
-      evidenciaEntregarMime: saved.evidenciaEntregarMime ?? file.type,
+      evidenciaEntregarMime: saved.evidenciaEntregarMime ?? contentType,
     };
   }
   if (kind === "facturar") {
@@ -235,14 +257,14 @@ export async function uploadEvidence(
       evidenciaFacturar: saved.evidenciaFacturar ?? file.name,
       evidenciaFacturarPath: saved.evidenciaFacturarPath ?? signed.path,
       evidenciaFacturarAt: saved.evidenciaFacturarAt,
-      evidenciaFacturarMime: saved.evidenciaFacturarMime ?? file.type,
+      evidenciaFacturarMime: saved.evidenciaFacturarMime ?? contentType,
     };
   }
   return {
     evidencia: saved.evidencia ?? file.name,
     evidenciaPath: saved.evidenciaPath ?? signed.path,
     evidenciaAt: saved.evidenciaAt,
-    evidenciaMime: saved.evidenciaMime ?? file.type,
+    evidenciaMime: saved.evidenciaMime ?? contentType,
   };
 }
 

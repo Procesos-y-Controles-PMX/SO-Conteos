@@ -8,8 +8,11 @@ import SemaforoSucursalGroup from "@/components/conteos/SemaforoSucursalGroup";
 import WeekBoard, { WeekBoardSkeleton } from "@/components/conteos/WeekBoard";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
-import { deleteConteo, fetchSemaforo } from "@/lib/store";
+import { getCurrentUser } from "@/lib/auth";
+import { deleteConteo, fetchSemaforo, unlockWeek } from "@/lib/store";
 import {
+  weekStateFor,
+  type WeekState,
   type CountSession,
   type Semaforo,
   type SemaforoResumen,
@@ -62,6 +65,8 @@ export default function AdminSemaforoPage() {
   const [resumen, setResumen] = useState<SemaforoResumen | null>(null);
   const [historyWeeks, setHistoryWeeks] = useState<string[]>([]);
   const [history, setHistory] = useState<CountSession[]>([]);
+  const [unlocking, setUnlocking] = useState<{ sucursal: Sucursal; weekKey: string } | null>(null);
+  const [unlockPending, setUnlockPending] = useState(false);
 
   useEffect(() => {
     const saved = zonaStorageRead();
@@ -112,18 +117,43 @@ export default function AdminSemaforoPage() {
   }
 
   const rows = sucursales.map((sucursal) => {
-    const doneByWeek: Record<string, boolean> = {};
-    for (const session of history) {
-      if (session.sucursalId !== sucursal.id || session.kind !== "semanal") continue;
-      if (session.status === "enviado") doneByWeek[session.weekKey] = true;
+    const stateByWeek: Record<string, WeekState> = {};
+    for (const key of historyWeeks) {
+      const session = history.find((s) => s.sucursalId === sucursal.id && s.kind === "semanal" && s.weekKey === key);
+      stateByWeek[key] = weekStateFor(session, key, weekKey);
     }
     return {
       sucursal,
       weekly: sessions.find((s) => s.sucursalId === sucursal.id && s.kind === "semanal"),
       urgentes: sessions.filter((s) => s.sucursalId === sucursal.id && s.kind === "urgente"),
-      doneByWeek,
+      stateByWeek,
     };
   });
+
+  async function refresh() {
+    const data = await fetchSemaforo(weekKey, { zonas });
+    setSucursales(data.sucursales);
+    setSessions(data.sessions);
+    setZonaOpciones(data.zonaOpciones ?? []);
+    setResumen(data.resumen ?? null);
+    setHistoryWeeks(data.historyWeeks ?? []);
+    setHistory(data.history ?? []);
+  }
+
+  async function confirmUnlock() {
+    if (!unlocking) return;
+    setUnlockPending(true);
+    try {
+      await unlockWeek(unlocking.sucursal.id, unlocking.weekKey, getCurrentUser()?.nombre ?? "");
+      toast.success(`${unlocking.sucursal.nombre}: ${weekLabel(unlocking.weekKey)} desbloqueada.`);
+      setUnlocking(null);
+      await refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo desbloquear.");
+    } finally {
+      setUnlockPending(false);
+    }
+  }
 
   const groups = zonas.map((id) => ({
     id,
@@ -137,13 +167,7 @@ export default function AdminSemaforoPage() {
       await deleteConteo(pending.session.id);
       toast.success("Conteo borrado.");
       setPending(null);
-      const data = await fetchSemaforo(weekKey, { zonas });
-      setSucursales(data.sucursales);
-      setSessions(data.sessions);
-      setZonaOpciones(data.zonaOpciones ?? []);
-      setResumen(data.resumen ?? null);
-      setHistoryWeeks(data.historyWeeks ?? []);
-      setHistory(data.history ?? []);
+      await refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo borrar.");
     } finally {
@@ -264,6 +288,7 @@ export default function AdminSemaforoPage() {
                 rows={group.rows}
                 historyWeeks={historyWeeks}
                 onDelete={(session, nombre) => setPending({ session, nombre })}
+                onUnlock={(sucursal, key) => setUnlocking({ sucursal, weekKey: key })}
               />
             ))
           )}
@@ -277,6 +302,19 @@ export default function AdminSemaforoPage() {
         pending={deleting}
         onCancel={() => setPending(null)}
         onConfirm={() => void confirmDelete()}
+      />
+
+      <ConfirmDialog
+        open={Boolean(unlocking)}
+        title="Desbloquear semana"
+        body={`${unlocking?.sucursal.nombre ?? "La sucursal"} podrá capturar el conteo de ${
+          unlocking ? weekLabel(unlocking.weekKey) : "esa semana"
+        }.`}
+        confirmLabel="Desbloquear"
+        cancelLabel="Cancelar"
+        pending={unlockPending}
+        onCancel={() => setUnlocking(null)}
+        onConfirm={() => void confirmUnlock()}
       />
     </div>
   );

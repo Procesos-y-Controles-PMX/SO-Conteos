@@ -9,14 +9,16 @@ import {
   type CountSession,
   type Semaforo,
   type Sucursal,
+  type WeekState,
 } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, formatMoney } from "@/lib/utils";
+import { weekLabelParts } from "@/lib/week";
 
 export type SemaforoSucursalRow = {
   sucursal: Sucursal;
   weekly?: CountSession;
   urgentes: CountSession[];
-  doneByWeek: Record<string, boolean>;
+  stateByWeek: Record<string, WeekState>;
 };
 
 function statusBarClass(status: Semaforo) {
@@ -63,6 +65,11 @@ function CountAction({
 
 function weeklyLabel(weekly: CountSession) {
   return weekly.status === "enviado" ? "Ver enviado" : "Ver semanal";
+}
+
+function difCopy(weekly?: CountSession) {
+  if (weekly?.status !== "enviado" || weekly.difSkus == null) return null;
+  return `${weekly.difSkus} dif · ${formatMoney(weekly.difMonto ?? 0)}`;
 }
 
 function urgenteLabel(urgente: CountSession) {
@@ -151,12 +158,16 @@ function TableHead({ historyWeeks }: { historyWeeks: string[] }) {
         <th className="px-3 py-2.5 align-bottom">
           <p className="field-label">4 sem</p>
           {historyWeeks.length > 0 ? (
-            <div className="mt-0.5 grid w-[5.75rem] grid-cols-4 justify-items-center">
-              {historyWeeks.map((key) => (
-                <span key={key} className="font-mono text-[10px] font-semibold tabular-nums text-fg-faint">
-                  {Number(key.split("-W")[1])}
-                </span>
-              ))}
+            <div className="mt-0.5 grid w-[7.25rem] grid-cols-4 justify-items-center">
+              {historyWeeks.map((key) => {
+                const { month, day, year } = weekLabelParts(key);
+                return (
+                  <span key={key} className="flex flex-col items-center leading-none" title={`${month} ${day} ${year}`}>
+                    <span className="text-[8px] font-bold tracking-wide text-fg-faint">{month}</span>
+                    <span className="mt-0.5 font-mono text-[10px] font-semibold tabular-nums text-fg-muted">{day}</span>
+                  </span>
+                );
+              })}
             </div>
           ) : (
             <div className="mt-0.5 grid w-[5.75rem] grid-cols-4 justify-items-center">
@@ -184,16 +195,18 @@ function SucursalCard({
   sucursal,
   weekly,
   urgentes,
-  doneByWeek,
+  stateByWeek,
   historyWeeks,
   onDelete,
+  onUnlock,
 }: {
   sucursal: Sucursal;
   weekly?: CountSession;
   urgentes: CountSession[];
-  doneByWeek: Record<string, boolean>;
+  stateByWeek: Record<string, WeekState>;
   historyWeeks: string[];
   onDelete: (session: CountSession, nombre: string) => void;
+  onUnlock?: (sucursal: Sucursal, weekKey: string) => void;
 }) {
   const status = sessionSemaforo(weekly);
 
@@ -214,12 +227,22 @@ function SucursalCard({
               <dt>Semanal</dt>
               <dd className="truncate text-right">{weekly?.counterName ?? "—"}</dd>
             </div>
+            {difCopy(weekly) ? (
+              <div className="flex justify-between gap-3">
+                <dt>Diferencias</dt>
+                <dd className="font-mono tabular-nums">{difCopy(weekly)}</dd>
+              </div>
+            ) : null}
             <div className="flex justify-between gap-3">
               <dt>Urgentes</dt>
               <dd>{urgentesCopy(urgentes)}</dd>
             </div>
           </dl>
-          <WeekHistory weeks={historyWeeks} doneByWeek={doneByWeek} />
+          <WeekHistory
+            weeks={historyWeeks}
+            stateByWeek={stateByWeek}
+            onUnlock={onUnlock ? (weekKey) => onUnlock(sucursal, weekKey) : undefined}
+          />
         </div>
         <div className="mt-3 space-y-2">
           {weekly ? (
@@ -247,17 +270,19 @@ function SucursalRow({
   sucursal,
   weekly,
   urgentes,
-  doneByWeek,
+  stateByWeek,
   historyWeeks,
   onDelete,
+  onUnlock,
   enterDelay = 0,
 }: {
   sucursal: Sucursal;
   weekly?: CountSession;
   urgentes: CountSession[];
-  doneByWeek: Record<string, boolean>;
+  stateByWeek: Record<string, WeekState>;
   historyWeeks: string[];
   onDelete: (session: CountSession, nombre: string) => void;
+  onUnlock?: (sucursal: Sucursal, weekKey: string) => void;
   enterDelay?: number;
 }) {
   const status = sessionSemaforo(weekly);
@@ -277,10 +302,18 @@ function SucursalRow({
           <SemaforoDot value={status} size="sm" />
         </td>
         <td className={cell}>
-          <WeekHistory weeks={historyWeeks} doneByWeek={doneByWeek} compact />
+          <WeekHistory
+            weeks={historyWeeks}
+            stateByWeek={stateByWeek}
+            onUnlock={onUnlock ? (weekKey) => onUnlock(sucursal, weekKey) : undefined}
+            compact
+          />
         </td>
         <td className={cn(cell, "max-w-0 overflow-hidden text-xs text-fg-subtle")}>
           <span className="block truncate">{weekly?.counterName ?? "—"}</span>
+          {difCopy(weekly) ? (
+            <span className="block truncate font-mono text-[11px] tabular-nums text-fg-muted">{difCopy(weekly)}</span>
+          ) : null}
         </td>
         <td className={cn(cell, "max-w-0 overflow-hidden text-xs text-fg-subtle")}>
           <span className="block truncate">{urgentesCopy(urgentes)}</span>
@@ -324,6 +357,7 @@ export default function SemaforoSucursalGroup({
   rows,
   historyWeeks,
   onDelete,
+  onUnlock,
   loading = false,
   placeholderCount = 8,
 }: {
@@ -331,6 +365,7 @@ export default function SemaforoSucursalGroup({
   rows: SemaforoSucursalRow[];
   historyWeeks: string[];
   onDelete: (session: CountSession, nombre: string) => void;
+  onUnlock?: (sucursal: Sucursal, weekKey: string) => void;
   loading?: boolean;
   placeholderCount?: number;
 }) {
@@ -359,16 +394,17 @@ export default function SemaforoSucursalGroup({
                 {...row}
                 historyWeeks={historyWeeks}
                 onDelete={onDelete}
+                onUnlock={onUnlock}
               />
             ))}
       </div>
       <div className="neu-raised hidden overflow-hidden rounded-lg lg:block">
         <table className="w-full table-fixed text-left">
           <colgroup>
-            <col className="w-[24%]" />
-            <col className="w-[12%]" />
+            <col className="w-[22%]" />
             <col className="w-[12%]" />
             <col className="w-[16%]" />
+            <col className="w-[14%]" />
             <col className="w-[12%]" />
             <col className="w-[24%]" />
           </colgroup>
@@ -390,6 +426,7 @@ export default function SemaforoSucursalGroup({
                     {...row}
                     historyWeeks={historyWeeks}
                     onDelete={onDelete}
+                    onUnlock={onUnlock}
                     enterDelay={Math.min(i, 12) * 22}
                   />
                 ))}

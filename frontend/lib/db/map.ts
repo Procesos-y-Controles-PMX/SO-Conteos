@@ -1,5 +1,7 @@
 import type { SessionUser, Sucursal } from "@/lib/types";
 import { resolveSessionRole } from "@/lib/access";
+import { conteoBloqueado } from "@/lib/types";
+import { weekLabel } from "@/lib/week";
 
 export type CtzSucursalRow = {
   id: string;
@@ -30,6 +32,11 @@ export type CntConteoRow = {
   comentario: string | null;
   created_at: string;
   submitted_at: string | null;
+  captura_cerrada_at?: string | null;
+  desbloqueado_at?: string | null;
+  desbloqueado_por?: string | null;
+  dif_skus?: number | null;
+  dif_monto?: number | string | null;
 };
 
 export type CntLineaRow = {
@@ -143,7 +150,7 @@ export function mapSession(
     kind: row.kind,
     sucursalId: row.id_sucursal,
     weekKey: row.week_key,
-    titulo: row.titulo,
+    titulo: row.kind === "semanal" ? `Conteo semanal · ${weekLabel(row.week_key)}` : row.titulo,
     status: row.status,
     createdAt: row.created_at,
     submittedAt: row.submitted_at ?? undefined,
@@ -151,6 +158,17 @@ export function mapSession(
     counterPuesto: row.counter_puesto ?? undefined,
     comentario: row.comentario ?? undefined,
     evidenceRetentionDays: extra?.evidenceRetentionDays,
+    capturaCerradaAt: row.captura_cerrada_at ?? undefined,
+    desbloqueadoAt: row.desbloqueado_at ?? undefined,
+    desbloqueadoPor: row.desbloqueado_por ?? undefined,
+    difSkus: row.dif_skus ?? undefined,
+    difMonto: num(row.dif_monto) ?? undefined,
+    bloqueado: conteoBloqueado({
+      kind: row.kind,
+      status: row.status,
+      weekKey: row.week_key,
+      desbloqueadoAt: row.desbloqueado_at ?? undefined,
+    }),
     lines,
   };
 }

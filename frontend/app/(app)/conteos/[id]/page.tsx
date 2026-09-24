@@ -15,7 +15,15 @@ import { getCurrentUser } from "@/lib/auth";
 import { deleteConteo, getSession, patchLine, patchSession, submitSession, uploadEvidence } from "@/lib/store";
 import { setCountInProgress } from "@/lib/conteos/countLock";
 import { scopeWeeklySession } from "@/lib/catalog/polvos";
-import { countProgress, lineDiff, type CountLine, type CountSession, type EvidenceKind } from "@/lib/types";
+import {
+  countProgress,
+  countQtyLocked,
+  lineDiff,
+  lineMissingEvidence,
+  type CountLine,
+  type CountSession,
+  type EvidenceKind,
+} from "@/lib/types";
 import { weekLabel } from "@/lib/week";
 
 type Step = "identidad" | "conteo" | "revision" | "revision_diffs" | "enviado";
@@ -27,6 +35,13 @@ const START_WARNING = (
       Si tiene pendientes por entregar o por facturar, tenga a la mano las evidencias correspondientes antes de
       iniciar el conteo.
     </span>
+  </>
+);
+
+const CLOSE_WARNING = (
+  <>
+    Al cerrar la captura ya no podrás cambiar cantidades ni fotos.
+    <span className="mt-2 block">Después verás las diferencias contra SAP y solo podrás escribir comentarios.</span>
   </>
 );
 
@@ -54,6 +69,8 @@ export default function CountSessionPage() {
     puesto: string;
   } | null>(null);
   const [starting, setStarting] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [closing, setClosing] = useState(false);
   const saveTimer = useRef<number | null>(null);
   const pendingRef = useRef<Record<string, Partial<CountLine>>>({});
   const sessionIdRef = useRef(params.id);
@@ -101,6 +118,7 @@ export default function CountSessionPage() {
       .then((found) => {
         setSession(scopeWeeklySession(found));
         if (found.status === "enviado") setStep("enviado");
+        else if (found.capturaCerradaAt) setStep("revision_diffs");
         else if (found.counterName && found.counterPuesto) setStep("conteo");
         else setStep("identidad");
       })
@@ -132,6 +150,7 @@ export default function CountSessionPage() {
   const { filled, total } = countProgress(current);
   const safeIndex = Math.min(skuIndex, Math.max(0, current.lines.length - 1));
   const locked = current.status === "enviado";
+  const qtyLocked = countQtyLocked(current);
   const hubHref = current.kind === "semanal" ? "/conteos/semanales" : "/conteos/urgentes";
 
   async function applyIdentity(payload: { nombre: string; puesto: string }) {
@@ -155,6 +174,9 @@ export default function CountSessionPage() {
 
   function handlePatch(sku: string, patch: Partial<CountLine>) {
     if (locked) return;
+    if (qtyLocked && (patch.fisico !== undefined || patch.pendienteEntregar !== undefined || patch.pendienteFacturar !== undefined)) {
+      return;
+    }
     setSession((prev) => {
       if (!prev) return prev;
       return {
@@ -167,7 +189,7 @@ export default function CountSessionPage() {
   }
 
   async function handleEvidence(sku: string, file: File, kind: EvidenceKind = "general") {
-    if (locked) return;
+    if (locked || qtyLocked) return;
     const saved = await uploadEvidence(current.id, sku, file, kind);
     setSession((prev) => {
       if (!prev) return prev;
@@ -181,27 +203,6 @@ export default function CountSessionPage() {
 
   async function handleSubmit() {
     await flushSaves();
-    if (filled < total) {
-      toast.error(`Faltan ${total - filled} SKU por capturar.`);
-      setStep("conteo");
-      return;
-    }
-    const missingEvidence = current.lines.filter((line) => {
-      if (current.kind === "urgente") return !line.evidenciaPath;
-      if (current.kind === "semanal") {
-        const needEnt = (line.pendienteEntregar ?? 0) > 0 && !line.evidenciaEntregarPath;
-        const needFac = (line.pendienteFacturar ?? 0) > 0 && !line.evidenciaFacturarPath;
-        return needEnt || needFac;
-      }
-      return false;
-    });
-    if (missingEvidence.length > 0) {
-      toast.error("Falta evidencia en productos con pendientes o urgentes.");
-      setStep("conteo");
-      const idx = current.lines.findIndex((l) => l.sku === missingEvidence[0].sku);
-      if (idx >= 0) setSkuIndex(idx);
-      return;
-    }
     const missingComments = current.lines.filter((line) => {
       const diff = lineDiff(line);
       return diff != null && diff !== 0 && !(line.comentario ?? "").trim();
@@ -219,6 +220,46 @@ export default function CountSessionPage() {
     setSession(scopeWeeklySession(submitted));
     setStep("enviado");
     toast.success("Conteo enviado.");
+  }
+
+  /** Validates the capture before asking to close it; the close itself is irreversible. */
+  async function requestCloseCapture() {
+    await flushSaves();
+    if (filled < total) {
+      toast.error(`Faltan ${total - filled} SKU por capturar.`);
+      return;
+    }
+    const missingEvidence = current.lines.filter((line) => lineMissingEvidence(current.kind, line));
+    if (missingEvidence.length > 0) {
+      toast.error(
+        current.kind === "urgente"
+          ? "Falta foto en productos con físico mayor a 0."
+          : "Falta evidencia en productos con pendientes.",
+      );
+      const idx = current.lines.findIndex((l) => l.sku === missingEvidence[0].sku);
+      if (idx >= 0) setSkuIndex(idx);
+      return;
+    }
+    setConfirmClose(true);
+  }
+
+  async function closeCapture() {
+    setClosing(true);
+    try {
+      await flushSaves();
+      const next = await patchSession(current.id, { cerrarCaptura: true });
+      if (!next.capturaCerradaAt) {
+        toast.error("No se pudo cerrar la captura. Falta aplicar la actualización de base de datos.");
+        return;
+      }
+      setSession(scopeWeeklySession(next));
+      setConfirmClose(false);
+      setStep("revision");
+    } catch (err: unknown) {
+      toast.error(saveErrorMessage(err));
+    } finally {
+      setClosing(false);
+    }
   }
 
   /** Solo vive en el paso de identidad: una vez iniciado el conteo ya no se puede regresar. */
@@ -251,6 +292,26 @@ export default function CountSessionPage() {
     );
   }
 
+  if (current.bloqueado) {
+    return (
+      <div className="mx-auto max-w-lg">
+        <div className="mb-4">
+          <button type="button" className="btn-secondary min-h-10 gap-2 px-3 text-sm" onClick={handleRegresar}>
+            <ArrowLeft className="h-4 w-4" />
+            Regresar
+          </button>
+        </div>
+        <div className="neu-raised rounded-lg p-6 text-center">
+          <p className="field-label">{weekLabel(current.weekKey)}</p>
+          <h2 className="mt-1 font-display text-2xl font-semibold text-fg">Semana bloqueada</h2>
+          <p className="mt-2 text-sm text-fg-subtle">
+            Esta semana ya pasó sin conteo. Pide a un administrador que la desbloquee para capturarla.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       {step === "identidad" ? (
@@ -278,16 +339,14 @@ export default function CountSessionPage() {
         />
       ) : null}
 
-      {step === "conteo" ? (
+      {step === "conteo" && !qtyLocked ? (
         <SkuStepper
           session={current}
           index={safeIndex}
           onIndex={setSkuIndex}
           onPatch={handlePatch}
           onEvidence={handleEvidence}
-          onFinish={() => {
-            void flushSaves().finally(() => setStep("revision"));
-          }}
+          onFinish={() => void requestCloseCapture()}
         />
       ) : null}
 
@@ -297,10 +356,7 @@ export default function CountSessionPage() {
           <div className="fixed inset-x-0 bottom-0 z-40 bg-canvas/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm lg:static lg:bg-transparent lg:p-0">
             <div className="mx-auto flex max-w-lg flex-col gap-2 sm:flex-row">
               <button type="button" className="btn-primary flex-1" onClick={() => setStep("revision_diffs")}>
-                Continuar
-              </button>
-              <button type="button" className="btn-secondary flex-1" onClick={() => setStep("conteo")}>
-                Volver a corregir
+                Ver diferencias vs SAP
               </button>
             </div>
           </div>
@@ -318,9 +374,6 @@ export default function CountSessionPage() {
             <div className="mx-auto flex max-w-lg flex-col gap-2 sm:flex-row">
               <button type="button" className="btn-primary flex-1" onClick={() => void handleSubmit()}>
                 Confirmar y enviar
-              </button>
-              <button type="button" className="btn-secondary flex-1" onClick={() => setStep("revision")}>
-                Volver a la captura
               </button>
             </div>
           </div>
@@ -343,6 +396,17 @@ export default function CountSessionPage() {
           </button>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={confirmClose}
+        title="Cerrar captura"
+        body={CLOSE_WARNING}
+        confirmLabel="Cerrar captura"
+        cancelLabel="Seguir capturando"
+        pending={closing}
+        onCancel={() => setConfirmClose(false)}
+        onConfirm={() => void closeCapture()}
+      />
 
       <ConfirmDialog
         open={confirmStart}

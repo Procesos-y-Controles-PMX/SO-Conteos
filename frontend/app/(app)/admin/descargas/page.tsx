@@ -7,9 +7,13 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
 import SelectDropdown from "@/components/ui/SelectDropdown";
 import { listSucursales, sessionsForWeek, deleteConteo } from "@/lib/store";
-import { lineDiff, lineMonto, type CountLine, type CountSession, type Sucursal } from "@/lib/types";
-import { cn, downloadTextFile, formatNumber } from "@/lib/utils";
+import { lineDiff, lineMonto, sessionDiffStats, type CountLine, type CountSession, type Sucursal } from "@/lib/types";
+import { cn, downloadTextFile, formatMoney, formatNumber } from "@/lib/utils";
 import { nearbyWeekKeys, weekLabel } from "@/lib/week";
+import { LineEvidence } from "@/components/conteos/EvidencePreview";
+import DiffSortControls from "@/components/conteos/DiffSortControls";
+import EvidenceZipButton from "@/components/conteos/EvidenceZipButton";
+import { lineMatchesQuery, sortLines, type DiffSort } from "@/lib/conteos/diffSort";
 
 function qtyCell(value: number | null | undefined) {
   if (value == null) return "—";
@@ -19,7 +23,18 @@ function qtyCell(value: number | null | undefined) {
 function montoCell(line: CountLine) {
   const monto = lineMonto(line);
   if (monto == null) return "—";
-  return formatNumber(monto, 2);
+  return formatMoney(monto);
+}
+
+function linesForTable(lines: CountLine[], skuQuery: string, sort: DiffSort) {
+  return sortLines(
+    lines.filter((line) => lineMatchesQuery(line, skuQuery)),
+    sort,
+  );
+}
+
+function hasEvidence(session: CountSession) {
+  return session.lines.some((line) => line.evidenciaPath || line.evidenciaEntregarPath || line.evidenciaFacturarPath);
 }
 
 export default function DescargasPage() {
@@ -32,6 +47,8 @@ export default function DescargasPage() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [skuQuery, setSkuQuery] = useState("");
+  const [sort, setSort] = useState<DiffSort>("monto");
   const [commentLine, setCommentLine] = useState<{
     sku: string;
     nombre: string;
@@ -45,6 +62,7 @@ export default function DescargasPage() {
   useEffect(() => {
     void sessionsForWeek(week).then(setSessions);
     setExpandedId(null);
+    setSkuQuery("");
   }, [week]);
 
   const zonas = Array.from(new Set(sucursales.map((s) => s.zona)));
@@ -85,7 +103,7 @@ export default function DescargasPage() {
         const monto = lineMonto(line);
         lines.push(
           [
-            session.weekKey,
+            weekLabel(session.weekKey),
             session.kind,
             suc?.zona ?? "",
             suc?.nombre ?? "",
@@ -106,7 +124,7 @@ export default function DescargasPage() {
         );
       }
     }
-    downloadTextFile(`conteos-${week}.csv`, lines.join("\n"));
+    downloadTextFile(`conteos-${weekLabel(week).replaceAll(" ", "-")}.csv`, lines.join("\n"));
   }
 
   return (
@@ -116,9 +134,15 @@ export default function DescargasPage() {
         title="Descargas"
         subtitle="Filtros por zona, tienda y pestaña de semana. CSV o vista en página."
         actions={
-          <button type="button" className="btn-primary" onClick={download} disabled={rows.length === 0}>
-            Descargar CSV
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <EvidenceZipButton
+              ids={rows.filter(hasEvidence).map((s) => s.id)}
+              fileName={`evidencias-${weekLabel(week).replaceAll(" ", "-")}`}
+            />
+            <button type="button" className="btn-primary" onClick={download} disabled={rows.length === 0}>
+              Descargar CSV
+            </button>
+          </div>
         }
       />
       <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
@@ -168,20 +192,21 @@ export default function DescargasPage() {
               <th className="px-4 py-3">Contador</th>
               <th className="px-4 py-3">SKUs</th>
               <th className="px-4 py-3">Diffs</th>
+              <th className="px-4 py-3">Monto dif</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-fg-subtle">
+                <td colSpan={9} className="px-4 py-10 text-center text-fg-subtle">
                   Sin conteos con estos filtros.
                 </td>
               </tr>
             ) : (
               rows.map((session) => {
                 const suc = sucursales.find((s) => s.id === session.sucursalId);
-                const diffs = session.lines.filter((l) => (lineDiff(l) ?? 0) !== 0).length;
+                const diffs = sessionDiffStats(session);
                 const open = expandedId === session.id;
                 return (
                   <Fragment key={session.id}>
@@ -192,7 +217,10 @@ export default function DescargasPage() {
                           className="neu-button rounded-full p-2 text-fg-muted"
                           aria-expanded={open}
                           aria-label={open ? "Ocultar detalle" : "Ver detalle"}
-                          onClick={() => setExpandedId(open ? null : session.id)}
+                          onClick={() => {
+                            setExpandedId(open ? null : session.id);
+                            setSkuQuery("");
+                          }}
                         >
                           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </button>
@@ -202,7 +230,8 @@ export default function DescargasPage() {
                       <td className="px-4 py-3">{session.status.replace("_", " ")}</td>
                       <td className="px-4 py-3">{session.counterName ?? "—"}</td>
                       <td className="px-4 py-3 tabular-nums">{session.lines.length}</td>
-                      <td className="px-4 py-3 tabular-nums">{formatNumber(diffs, 0)}</td>
+                      <td className="px-4 py-3 tabular-nums">{formatNumber(diffs.skuCount, 0)}</td>
+                      <td className="px-4 py-3 tabular-nums">{formatMoney(diffs.monto)}</td>
                       <td className="px-4 py-3 text-right">
                         <button
                           type="button"
@@ -215,10 +244,29 @@ export default function DescargasPage() {
                     </tr>
                     {open ? (
                       <tr className="border-t border-line-subtle bg-muted/40">
-                        <td colSpan={8} className="px-4 py-4">
-                          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-fg-faint">
-                            Detalle de líneas
-                          </p>
+                        <td colSpan={9} className="px-4 py-4">
+                          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-fg-faint">
+                              Detalle de líneas · {sort === "monto" ? "monto de mayor a menor" : "por SKU"}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                              <DiffSortControls
+                                className="sm:w-[26rem]"
+                                query={skuQuery}
+                                onQuery={setSkuQuery}
+                                sort={sort}
+                                onSort={setSort}
+                              />
+                              {hasEvidence(session) ? (
+                                <EvidenceZipButton
+                                  ids={[session.id]}
+                                  fileName={`evidencias-${suc?.nombre ?? "sucursal"}-${weekLabel(session.weekKey)}`.replaceAll(" ", "-")}
+                                  label="Fotos (ZIP)"
+                                  className="min-h-9 px-3 text-xs"
+                                />
+                              ) : null}
+                            </div>
+                          </div>
                           <div className="overflow-x-auto">
                             <table className="min-w-full text-left text-xs">
                               <thead>
@@ -232,11 +280,12 @@ export default function DescargasPage() {
                                   <th className="px-2 py-2 text-right">Por facturar</th>
                                   <th className="px-2 py-2 text-right">Dif.</th>
                                   <th className="px-2 py-2 text-right">Monto</th>
+                                  <th className="px-2 py-2 text-center">Evidencia</th>
                                   <th className="px-2 py-2 text-center">Comentarios</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {session.lines.map((line) => {
+                                {linesForTable(session.lines, skuQuery, sort).map((line) => {
                                   const diff = lineDiff(line);
                                   const monto = lineMonto(line);
                                   return (
@@ -275,6 +324,9 @@ export default function DescargasPage() {
                                         )}
                                       >
                                         {montoCell(line)}
+                                      </td>
+                                      <td className="px-2 py-2">
+                                        <LineEvidence session={session} line={line} />
                                       </td>
                                       <td className="px-2 py-2 text-center">
                                         {line.comentario?.trim() ? (

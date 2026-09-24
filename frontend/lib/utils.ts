@@ -12,6 +12,15 @@ export function formatNumber(value: number, decimals = 2): string {
   }).format(value);
 }
 
+export function formatMoney(value: number, decimals = 2): string {
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
+}
+
 export function formatDateTime(iso: string): string {
   return new Intl.DateTimeFormat("es-MX", {
     dateStyle: "medium",

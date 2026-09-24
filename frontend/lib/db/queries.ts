@@ -4,6 +4,7 @@ import type { InventarioRow } from "@/lib/excel/parseInventario";
 import { mapInventarioMeta, mapLine, mapProducto, mapSession, type CntConteoRow, type CntLineaRow } from "@/lib/db/map";
 import { fetchSucursalById, fetchSucursales } from "@/lib/db/stores";
 import { evidenceRetentionDays, purgeExpiredEvidence, removeConteoEvidence } from "@/lib/evidence";
+import { weekKeyFromDate, weekLabel } from "@/lib/week";
 
 export { fetchSucursalById, fetchSucursales };
 
@@ -228,11 +229,20 @@ export async function fetchSessions(
   return result;
 }
 
+export class SemanaBloqueadaError extends Error {}
+
+/**
+ * Past weeks are locked: a store can only reopen a count that already exists.
+ * `unlock` (admin) creates it if needed and marks it as unlocked.
+ */
 export async function ensureWeekly(
   supabase: SupabaseClient,
   sucursalId: string,
   weekKey: string,
+  options: { unlockBy?: string } = {},
 ): Promise<CountSession> {
+  const unlock = options.unlockBy !== undefined;
+  const unlockPatch = { desbloqueado_at: new Date().toISOString(), desbloqueado_por: options.unlockBy || null };
   const { data: existing } = await supabase
     .from("cnt_conteos")
     .select("*")
@@ -240,7 +250,15 @@ export async function ensureWeekly(
     .eq("kind", "semanal")
     .eq("week_key", weekKey)
     .maybeSingle();
-  if (existing) return (await fetchSession(supabase, (existing as CntConteoRow).id, { syncCatalog: true }))!;
+  if (existing) {
+    const row = existing as CntConteoRow;
+    if (unlock && row.status !== "enviado") {
+      const { error } = await supabase.from("cnt_conteos").update(unlockPatch).eq("id", row.id);
+      if (error) throw error;
+    }
+    return (await fetchSession(supabase, row.id, { syncCatalog: true }))!;
+  }
+  if (!unlock && weekKey < weekKeyFromDate()) throw new SemanaBloqueadaError();
 
   const { data: created, error } = await supabase
     .from("cnt_conteos")
@@ -248,8 +266,9 @@ export async function ensureWeekly(
       kind: "semanal",
       id_sucursal: sucursalId,
       week_key: weekKey,
-      titulo: `Conteo semanal · ${weekKey}`,
+      titulo: `Conteo semanal · ${weekLabel(weekKey)}`,
       status: "pendiente",
+      ...(unlock ? unlockPatch : {}),
     })
     .select("*")
     .single();

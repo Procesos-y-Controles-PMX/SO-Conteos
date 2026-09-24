@@ -49,7 +49,12 @@ create table if not exists cnt_conteos (
   counter_puesto text,
   comentario text,
   created_at timestamptz not null default now(),
-  submitted_at timestamptz
+  submitted_at timestamptz,
+  captura_cerrada_at timestamptz,
+  desbloqueado_at timestamptz,
+  desbloqueado_por text,
+  dif_skus integer,
+  dif_monto numeric
 );
 
 create unique index if not exists cnt_conteos_semanal_uniq

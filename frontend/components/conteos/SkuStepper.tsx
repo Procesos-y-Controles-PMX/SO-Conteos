@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Camera, ChevronLeft, ChevronRight } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, Upload } from "lucide-react";
 import { toast } from "sonner";
 import QuantityField from "@/components/conteos/QuantityField";
+import EvidencePreview from "@/components/conteos/EvidencePreview";
 import SearchCombobox, { type SearchComboboxOption } from "@/components/ui/SearchCombobox";
 import {
   bagKgFromName,
@@ -19,6 +20,11 @@ import {
 import type { CountLine, CountSession, EvidenceKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { weekLabel } from "@/lib/week";
+
+const WEEKLY_HINT = "Obligatoria porque el pendiente es mayor a 0.";
+
+/** Explicit extensions: some desktop pickers hide HEIC under image/*. */
+const EVIDENCE_ACCEPT = "image/*,video/*,.heic,.heif,.jpg,.jpeg,.png,.webp,.mp4,.mov";
 
 function normalize(value: string) {
   return value
@@ -115,8 +121,8 @@ export default function SkuStepper({
     if (line.fisico == null) {
       onPatch(line.sku, { fisico: 0 });
     }
-    if (showUrgentEvidence && !line.evidenciaPath) {
-      toast.error("Adjunta foto o video de este producto.");
+    if (showUrgentEvidence && (line.fisico ?? 0) > 0 && !line.evidenciaPath) {
+      toast.error("Adjunta la foto de este producto.");
       return;
     }
     if (showWeeklyEvidence && hasPendEntregar && !line.evidenciaEntregarPath) {
@@ -131,49 +137,83 @@ export default function SkuStepper({
     else onIndex(index + 1);
   }
 
+  function upload(kind: EvidenceKind, file: File | undefined) {
+    if (!file || !onEvidence) return;
+    setUploading(true);
+    void onEvidence(line.sku, file, kind)
+      .then(() => toast.success("Evidencia guardada."))
+      .catch((err: Error) => toast.error(err.message || "No se pudo subir."))
+      .finally(() => setUploading(false));
+  }
+
   function EvidenceSlot({
     kind,
     label,
+    hint,
     attachedName,
     attachedPath,
+    attachedMime,
+    className = "mt-3",
   }: {
     kind: EvidenceKind;
     label: string;
+    hint: string;
     attachedName?: string;
     attachedPath?: string;
+    attachedMime?: string;
+    className?: string;
   }) {
+    const buttonClass =
+      "neu-button min-h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-sm px-3 py-2.5 text-xs font-semibold text-fg";
     return (
-      <div className="mt-3">
+      <div className={className}>
         <p className="field-label mb-1">{label}</p>
-        <p className="mb-2 text-[11px] leading-relaxed text-fg-subtle">
-          En caso de ser mayor a 0, adjunta la evidencia.
-        </p>
-        <label className="neu-button flex min-h-11 cursor-pointer items-center gap-2 rounded-sm px-3 py-2.5 text-xs text-fg">
-          <Camera className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 truncate">
-            {uploading
-              ? "Subiendo evidencia…"
-              : attachedPath
-                ? attachedName || "Evidencia adjunta"
-                : "Adjuntar evidencia"}
-          </span>
-          <input
-            type="file"
-            accept="image/*,video/*"
-            capture="environment"
-            className="hidden"
-            disabled={uploading || !onEvidence}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (!file || !onEvidence) return;
-              setUploading(true);
-              void onEvidence(line.sku, file, kind)
-                .catch((err: Error) => toast.error(err.message || "No se pudo subir."))
-                .finally(() => setUploading(false));
-            }}
-          />
-        </label>
+        <p className="mb-2 text-[11px] leading-relaxed text-fg-subtle">{hint}</p>
+        <div className="flex flex-wrap gap-2">
+          <label className={cn(buttonClass, "hidden pointer-coarse:flex", uploading && "pointer-events-none opacity-60")}>
+            <Camera className="h-4 w-4 shrink-0" />
+            Tomar foto
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              disabled={uploading || !onEvidence}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                upload(kind, file);
+              }}
+            />
+          </label>
+          <label className={cn(buttonClass, "flex", uploading && "pointer-events-none opacity-60")}>
+            <Upload className="h-4 w-4 shrink-0" />
+            {attachedPath ? "Cambiar archivo" : "Elegir archivo"}
+            <input
+              type="file"
+              accept={EVIDENCE_ACCEPT}
+              className="hidden"
+              disabled={uploading || !onEvidence}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                upload(kind, file);
+              }}
+            />
+          </label>
+        </div>
+        {uploading ? <p className="mt-2 text-[11px] text-fg-subtle">Subiendo evidencia…</p> : null}
+        {attachedPath ? (
+          <div className="mt-2">
+            <EvidencePreview
+              sessionId={session.id}
+              sku={line.sku}
+              kind={kind}
+              mime={attachedMime}
+              name={attachedName}
+            />
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -266,12 +306,14 @@ export default function SkuStepper({
               label="Pendiente entregar"
               {...bindQty(line.pendienteEntregar, (pendienteEntregar) => onPatch(line.sku, { pendienteEntregar }))}
             />
-            {showWeeklyEvidence ? (
+            {showWeeklyEvidence && (hasPendEntregar || line.evidenciaEntregarPath) ? (
               <EvidenceSlot
                 kind="entregar"
-                label="Evidencia"
+                label="Evidencia entregar"
+                hint={WEEKLY_HINT}
                 attachedName={line.evidenciaEntregar}
                 attachedPath={line.evidenciaEntregarPath}
+                attachedMime={line.evidenciaEntregarMime}
               />
             ) : null}
           </div>
@@ -281,50 +323,29 @@ export default function SkuStepper({
               label="Pendiente facturar"
               {...bindQty(line.pendienteFacturar, (pendienteFacturar) => onPatch(line.sku, { pendienteFacturar }))}
             />
-            {showWeeklyEvidence ? (
+            {showWeeklyEvidence && (hasPendFacturar || line.evidenciaFacturarPath) ? (
               <EvidenceSlot
                 kind="facturar"
-                label="Evidencia"
+                label="Evidencia facturar"
+                hint={WEEKLY_HINT}
                 attachedName={line.evidenciaFacturar}
                 attachedPath={line.evidenciaFacturarPath}
+                attachedMime={line.evidenciaFacturarMime}
               />
             ) : null}
           </div>
         </div>
 
         {showUrgentEvidence ? (
-          <div className="mt-5">
-            <p className="field-label mb-1.5">Evidencia fotográfica</p>
-            <p className="mb-3 text-[11px] leading-relaxed text-fg-subtle">
-              En caso de ser mayor a 0, adjunta la evidencia.
-            </p>
-            <label className="neu-button flex min-h-11 cursor-pointer items-center gap-3 rounded-sm px-4 py-3 text-sm text-fg">
-              <Camera className="h-4 w-4 shrink-0" />
-              <span className="min-w-0 truncate">
-                {uploading
-                  ? "Subiendo evidencia…"
-                  : line.evidenciaPath
-                    ? line.evidencia || "Evidencia adjunta"
-                    : "Adjuntar evidencia"}
-              </span>
-              <input
-                type="file"
-                accept="image/*,video/*"
-                capture="environment"
-                className="hidden"
-                disabled={uploading || !onEvidence}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!file || !onEvidence) return;
-                  setUploading(true);
-                  void onEvidence(line.sku, file, "general")
-                    .catch((err: Error) => toast.error(err.message || "No se pudo subir."))
-                    .finally(() => setUploading(false));
-                }}
-              />
-            </label>
-          </div>
+          <EvidenceSlot
+            kind="general"
+            label="Evidencia fotográfica"
+            hint="Obligatoria si el físico es mayor a 0."
+            attachedName={line.evidencia}
+            attachedPath={line.evidenciaPath}
+            attachedMime={line.evidenciaMime}
+            className="mt-5"
+          />
         ) : null}
       </article>
 
@@ -335,7 +356,7 @@ export default function SkuStepper({
             Anterior
           </button>
           <button type="button" className="btn-primary flex-[1.3]" disabled={uploading} onClick={goNext}>
-            {last ? "Revisar captura" : "Siguiente"}
+            {last ? "Terminar captura" : "Siguiente"}
             {!last ? <ChevronRight className="h-4 w-4" /> : null}
           </button>
         </div>

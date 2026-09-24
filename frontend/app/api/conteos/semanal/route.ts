@@ -1,5 +1,6 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
-import { ensureWeekly } from "@/lib/db/queries";
+import { MSG_BLOQUEADO } from "@/lib/api/conteoGuard";
+import { SemanaBloqueadaError, ensureWeekly } from "@/lib/db/queries";
 import { weekKeyFromDate } from "@/lib/week";
 
 export async function POST(request: Request) {
@@ -15,6 +16,7 @@ export async function POST(request: Request) {
     );
     return ok({ session });
   } catch (err) {
+    if (err instanceof SemanaBloqueadaError) return fail(MSG_BLOQUEADO, 409);
     console.error(err);
     return fail("No se pudo abrir el conteo semanal.", 500);
   }

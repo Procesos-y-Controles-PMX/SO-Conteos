@@ -10,6 +10,7 @@ import {
   mimeFromFileName,
   removeEvidenceFiles,
 } from "@/lib/evidence";
+import { conteoParaEditar } from "@/lib/api/conteoGuard";
 import type { EvidenceKind } from "@/lib/types";
 
 type Params = { params: Promise<{ id: string }> };
@@ -120,16 +121,8 @@ export async function POST(request: Request, { params }: Params) {
   if ("response" in resolved) return resolved.response;
   const { id } = await params;
   try {
-    const { data: conteo, error: conteoError } = await resolved.supabase
-      .from("cnt_conteos")
-      .select("status")
-      .eq("id", id)
-      .maybeSingle();
-    if (conteoError) throw conteoError;
-    if (!conteo) return fail("Conteo no encontrado.", 404);
-    if ((conteo as { status?: string }).status === "enviado") {
-      return fail("Este conteo ya fue enviado y no se puede editar.", 409);
-    }
+    const guard = await conteoParaEditar(resolved.supabase, id, { capturaAbierta: true });
+    if ("response" in guard) return guard.response;
 
     const body = (await request.json()) as {
       sku?: string;
@@ -176,16 +169,8 @@ export async function PUT(request: Request, { params }: Params) {
   if ("response" in resolved) return resolved.response;
   const { id } = await params;
   try {
-    const { data: conteo, error: conteoError } = await resolved.supabase
-      .from("cnt_conteos")
-      .select("status")
-      .eq("id", id)
-      .maybeSingle();
-    if (conteoError) throw conteoError;
-    if (!conteo) return fail("Conteo no encontrado.", 404);
-    if ((conteo as { status?: string }).status === "enviado") {
-      return fail("Este conteo ya fue enviado y no se puede editar.", 409);
-    }
+    const guard = await conteoParaEditar(resolved.supabase, id, { capturaAbierta: true });
+    if ("response" in guard) return guard.response;
 
     const body = (await request.json()) as {
       sku?: string;
@@ -210,8 +195,8 @@ export async function PUT(request: Request, { params }: Params) {
     if (!existing) return fail("Esa línea no existe.", 404);
 
     const at = new Date().toISOString();
-    const mime = body.contentType || null;
     const fileName = body.fileName?.trim() || path.split("/").pop() || "evidencia";
+    const mime = body.contentType?.trim() || mimeFromFileName(fileName) || null;
     const { error } = await resolved.supabase
       .from("cnt_conteo_lineas")
       .update(metaColumns(kind, path, fileName, mime))

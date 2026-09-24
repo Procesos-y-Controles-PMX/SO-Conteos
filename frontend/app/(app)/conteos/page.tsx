@@ -121,7 +121,7 @@ export default function ConteosHubPage() {
           <p className="mt-1 text-sm text-fg-subtle">
             {urgentesPendientes.length === 0
               ? "No hay solicitudes puntuales."
-              : `${urgentesPendientes.length} pendiente(s). Requiere foto o video.`}
+              : `${urgentesPendientes.length} pendiente(s). Foto obligatoria si el físico es mayor a 0.`}
           </p>
           <p className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-steel">
             {urgentesPendientes.length > 0 ? "Abrir pendiente" : "Ver listado"}

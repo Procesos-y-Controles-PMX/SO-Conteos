@@ -2,9 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import DiffReview from "@/components/conteos/DiffReview";
+import EvidenceZipButton from "@/components/conteos/EvidenceZipButton";
 import SemaforoDot from "@/components/conteos/SemaforoDot";
 import PageHeader from "@/components/ui/PageHeader";
-import { countProgress, sessionSemaforo, type CountSession } from "@/lib/types";
+import { countProgress, sessionDiffStats, sessionSemaforo, type CountSession } from "@/lib/types";
+import { formatMoney } from "@/lib/utils";
 import { weekLabel } from "@/lib/week";
 
 const STATUS_TITLE: Record<CountSession["status"], string> = {
@@ -22,6 +24,10 @@ export default function AdminCountReview({
 }) {
   const router = useRouter();
   const { filled, total } = countProgress(session);
+  const diffs = sessionDiffStats(session);
+  const hasEvidence = session.lines.some(
+    (line) => line.evidenciaPath || line.evidenciaEntregarPath || line.evidenciaFacturarPath,
+  );
   const who = session.counterName
     ? `${session.counterName}${session.counterPuesto ? ` · ${session.counterPuesto}` : ""}`
     : "La sucursal aún no indica quién cuenta";
@@ -31,7 +37,7 @@ export default function AdminCountReview({
       <PageHeader
         eyebrow={session.kind === "semanal" ? weekLabel(session.weekKey) : "Urgente"}
         title={session.titulo}
-        subtitle={`${filled}/${total} SKUs · solo consulta`}
+        subtitle={`${filled}/${total} SKUs · ${diffs.skuCount} dif · ${formatMoney(diffs.monto)} · solo consulta`}
       />
       <div className="mx-auto max-w-lg space-y-4">
         <div className="neu-raised rounded-lg p-6">
@@ -46,6 +52,13 @@ export default function AdminCountReview({
         </div>
         <DiffReview session={session} mode="diferencias" readOnly />
         <DiffReview session={session} mode="captura" readOnly />
+        {hasEvidence ? (
+          <EvidenceZipButton
+            ids={[session.id]}
+            fileName={`evidencias-${session.titulo}`.replace(/[^\p{L}\p{N}-]+/gu, "-")}
+            className="w-full"
+          />
+        ) : null}
         <button type="button" className="btn-secondary w-full" onClick={() => router.push("/admin")}>
           Volver al semáforo
         </button>

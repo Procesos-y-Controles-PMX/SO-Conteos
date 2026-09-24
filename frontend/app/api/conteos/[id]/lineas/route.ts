@@ -1,4 +1,5 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
+import { conteoParaEditar, MSG_CAPTURA_CERRADA } from "@/lib/api/conteoGuard";
 import type { CountLine } from "@/lib/types";
 
 type Params = { params: Promise<{ id: string }> };
@@ -8,24 +9,23 @@ export async function PATCH(request: Request, { params }: Params) {
   if ("response" in resolved) return resolved.response;
   const { id } = await params;
   try {
-    const { data: existing, error: existingError } = await resolved.supabase
-      .from("cnt_conteos")
-      .select("status")
-      .eq("id", id)
-      .maybeSingle();
-    if (existingError) throw existingError;
-    if (!existing) return fail("Conteo no encontrado.", 404);
-    if ((existing as { status?: string }).status === "enviado") {
-      return fail("Este conteo ya fue enviado y no se puede editar.", 409);
-    }
+    const guard = await conteoParaEditar(resolved.supabase, id);
+    if ("response" in guard) return guard.response;
 
     const body = (await request.json()) as { sku?: string; patch?: Partial<CountLine> };
     if (!body.sku || !body.patch) return fail("SKU y datos requeridos.");
+    const touchesQty =
+      body.patch.fisico !== undefined ||
+      body.patch.pendienteEntregar !== undefined ||
+      body.patch.pendienteFacturar !== undefined;
+    if (touchesQty && guard.row.captura_cerrada_at) return fail(MSG_CAPTURA_CERRADA, 409);
+
     const dbPatch: Record<string, unknown> = {};
     if (body.patch.fisico !== undefined) dbPatch.fisico = body.patch.fisico;
     if (body.patch.pendienteEntregar !== undefined) dbPatch.pendiente_entregar = body.patch.pendienteEntregar;
     if (body.patch.pendienteFacturar !== undefined) dbPatch.pendiente_facturar = body.patch.pendienteFacturar;
     if (body.patch.comentario !== undefined) dbPatch.comentario = body.patch.comentario;
+    if (Object.keys(dbPatch).length === 0) return ok({ saved: true });
     const { error } = await resolved.supabase
       .from("cnt_conteo_lineas")
       .update(dbPatch)

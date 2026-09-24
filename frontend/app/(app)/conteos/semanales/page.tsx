@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Lock } from "lucide-react";
 import SemaforoDot from "@/components/conteos/SemaforoDot";
 import PageHeader from "@/components/ui/PageHeader";
 import { useAuth } from "@/lib/auth";
@@ -32,6 +33,19 @@ export default function SemanalesPage() {
         {rows.map((session) => {
           const { filled, total } = countProgress(session);
           const href = `/conteos/${session.id}`;
+          if (session.bloqueado) {
+            return (
+              <li key={session.id}>
+                <div className="neu-raised flex items-center justify-between gap-3 rounded-lg p-4 opacity-70" aria-disabled>
+                  <div className="min-w-0">
+                    <p className="font-display text-lg font-semibold text-fg">{weekLabel(session.weekKey)}</p>
+                    <p className="text-xs text-fg-subtle">Bloqueada · pide a un administrador que la desbloquee.</p>
+                  </div>
+                  <Lock className="h-4 w-4 shrink-0 text-brand" aria-label="Bloqueada" />
+                </div>
+              </li>
+            );
+          }
           return (
             <li key={session.id}>
               <Link href={href} className="neu-raised flex items-center justify-between gap-3 rounded-lg p-4">

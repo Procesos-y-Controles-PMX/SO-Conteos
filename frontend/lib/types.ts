@@ -1,3 +1,5 @@
+import { weekKeyFromDate } from "./week";
+
 export type Role = "admin" | "tienda" | "administrador_general";
 
 export type CountKind = "semanal" | "urgente";
@@ -100,6 +102,13 @@ export type CountSession = {
   counterPuesto?: string;
   comentario?: string;
   evidenceRetentionDays?: number;
+  capturaCerradaAt?: string;
+  desbloqueadoAt?: string;
+  desbloqueadoPor?: string;
+  difSkus?: number;
+  difMonto?: number;
+  /** Semana pasada sin empezar y sin desbloqueo del admin. */
+  bloqueado?: boolean;
   lines: CountLine[];
 };
 
@@ -126,6 +135,61 @@ export function lineMonto(line: CountLine): number | null {
   const diff = lineDiff(line);
   if (diff == null) return null;
   return diff * (line.costo ?? 0);
+}
+
+export function sessionDiffStats(session: CountSession): { skuCount: number; monto: number } {
+  let skuCount = 0;
+  let monto = 0;
+  for (const line of session.lines) {
+    const diff = lineDiff(line);
+    if (diff == null || diff === 0) continue;
+    skuCount += 1;
+    monto += lineMonto(line) ?? 0;
+  }
+  return { skuCount, monto };
+}
+
+export function countQtyLocked(session: Pick<CountSession, "status" | "capturaCerradaAt">) {
+  return session.status === "enviado" || Boolean(session.capturaCerradaAt);
+}
+
+/** Photo is required for urgent lines only when something was physically counted. */
+export function urgentNeedsEvidence(line: CountLine) {
+  return (line.fisico ?? 0) > 0 && !line.evidenciaPath;
+}
+
+export function lineMissingEvidence(kind: CountKind, line: CountLine) {
+  if (kind === "urgente") return urgentNeedsEvidence(line);
+  const needEnt = (line.pendienteEntregar ?? 0) > 0 && !line.evidenciaEntregarPath;
+  const needFac = (line.pendienteFacturar ?? 0) > 0 && !line.evidenciaFacturarPath;
+  return needEnt || needFac;
+}
+
+/**
+ * A weekly count locks once its week is over, unless it was already started
+ * or an admin unlocked it for that store.
+ */
+export function conteoBloqueado(
+  session: Pick<CountSession, "kind" | "status" | "weekKey" | "desbloqueadoAt">,
+  currentWeekKey = weekKeyFromDate(),
+) {
+  if (session.kind !== "semanal") return false;
+  if (session.status !== "pendiente") return false;
+  if (session.desbloqueadoAt) return false;
+  return session.weekKey < currentWeekKey;
+}
+
+export type WeekState = "enviado" | "abierta" | "bloqueada";
+
+/** State of a store's weekly count in the history; a missing past session counts as locked. */
+export function weekStateFor(
+  session: CountSession | undefined,
+  weekKey: string,
+  currentWeekKey = weekKeyFromDate(),
+): WeekState {
+  if (session?.status === "enviado") return "enviado";
+  if (session) return conteoBloqueado(session, currentWeekKey) ? "bloqueada" : "abierta";
+  return weekKey < currentWeekKey ? "bloqueada" : "abierta";
 }
 
 export function countProgress(session: CountSession): { filled: number; total: number } {
