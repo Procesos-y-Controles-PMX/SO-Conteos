@@ -99,7 +99,6 @@ export default function SkuStepper({
   const hasPendEntregar = (line.pendienteEntregar ?? 0) > 0;
   const hasPendFacturar = (line.pendienteFacturar ?? 0) > 0;
   const showWeeklyEvidence = session.kind === "semanal";
-  const showUrgentEvidence = session.kind === "urgente";
   const last = index >= total - 1;
   const counted = session.lines.filter((l) => l.fisico != null).length;
   const bagKg = bagKgFromName(line.nombre);
@@ -117,12 +116,15 @@ export default function SkuStepper({
     };
   }
 
+  const fisico = line.fisico ?? 0;
+  const needsFisicoPhoto = fisico > 0;
+
   function goNext() {
     if (line.fisico == null) {
       onPatch(line.sku, { fisico: 0 });
     }
-    if (showUrgentEvidence && (line.fisico ?? 0) > 0 && !line.evidenciaPath) {
-      toast.error("Adjunta la foto de este producto.");
+    if (needsFisicoPhoto && !line.evidenciaPath) {
+      toast.error("Adjunta la foto del inventario físico.");
       return;
     }
     if (showWeeklyEvidence && hasPendEntregar && !line.evidenciaEntregarPath) {
@@ -297,6 +299,17 @@ export default function SkuStepper({
             onCommit={goNext}
             {...bindQty(line.fisico, (fisico) => onPatch(line.sku, { fisico }))}
           />
+          {needsFisicoPhoto || line.evidenciaPath ? (
+            <EvidenceSlot
+              kind="general"
+              label="Foto del físico"
+              hint="Obligatoria si el físico es mayor a 0. Sirve para auditar la cantidad."
+              attachedName={line.evidencia}
+              attachedPath={line.evidenciaPath}
+              attachedMime={line.evidenciaMime}
+              className="mt-4"
+            />
+          ) : null}
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4">
@@ -335,18 +348,6 @@ export default function SkuStepper({
             ) : null}
           </div>
         </div>
-
-        {showUrgentEvidence ? (
-          <EvidenceSlot
-            kind="general"
-            label="Evidencia fotográfica"
-            hint="Obligatoria si el físico es mayor a 0."
-            attachedName={line.evidencia}
-            attachedPath={line.evidenciaPath}
-            attachedMime={line.evidenciaMime}
-            className="mt-5"
-          />
-        ) : null}
       </article>
 
       <div className="fixed inset-x-0 bottom-0 z-40 bg-canvas/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm lg:static lg:mt-4 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">

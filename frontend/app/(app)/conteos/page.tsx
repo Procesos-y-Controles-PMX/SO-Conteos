@@ -90,7 +90,7 @@ export default function ConteosHubPage() {
           </div>
           <h2 className="mt-3 font-display text-xl font-semibold text-fg">Conteo semanal</h2>
           <p className="mt-1 text-sm text-fg-subtle">
-            Stock L1–L12 de esta sucursal. Foto de evidencia si hay pendientes.
+            Stock L1–L12 de esta sucursal. Foto del físico si es mayor a 0.
           </p>
           <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted-strong">
             <div

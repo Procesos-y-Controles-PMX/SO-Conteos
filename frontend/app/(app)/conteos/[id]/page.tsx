@@ -234,7 +234,7 @@ export default function CountSessionPage() {
       toast.error(
         current.kind === "urgente"
           ? "Falta foto en productos con físico mayor a 0."
-          : "Falta evidencia en productos con pendientes.",
+          : "Falta foto del físico o evidencia en productos con pendientes.",
       );
       const idx = current.lines.findIndex((l) => l.sku === missingEvidence[0].sku);
       if (idx >= 0) setSkuIndex(idx);

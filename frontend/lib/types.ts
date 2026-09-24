@@ -153,13 +153,19 @@ export function countQtyLocked(session: Pick<CountSession, "status" | "capturaCe
   return session.status === "enviado" || Boolean(session.capturaCerradaAt);
 }
 
-/** Photo is required for urgent lines only when something was physically counted. */
-export function urgentNeedsEvidence(line: CountLine) {
+/** Audit photo of the physical count when something was counted. */
+export function fisicoNeedsEvidence(line: CountLine) {
   return (line.fisico ?? 0) > 0 && !line.evidenciaPath;
 }
 
+/** @deprecated Prefer fisicoNeedsEvidence */
+export function urgentNeedsEvidence(line: CountLine) {
+  return fisicoNeedsEvidence(line);
+}
+
 export function lineMissingEvidence(kind: CountKind, line: CountLine) {
-  if (kind === "urgente") return urgentNeedsEvidence(line);
+  if (fisicoNeedsEvidence(line)) return true;
+  if (kind !== "semanal") return false;
   const needEnt = (line.pendienteEntregar ?? 0) > 0 && !line.evidenciaEntregarPath;
   const needFac = (line.pendienteFacturar ?? 0) > 0 && !line.evidenciaFacturarPath;
   return needEnt || needFac;
