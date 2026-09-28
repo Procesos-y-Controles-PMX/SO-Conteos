@@ -1,8 +1,10 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
-import { fetchInventarioMeta, fetchProductos, fetchSapStock, fetchSucursales, replaceInventario } from "@/lib/db/queries";
-import { decodeSpreadsheetBuffer, parseDelimitedText, parseCsvText, keepConteoSpreadsheet, resolveInventarioRows } from "@/lib/excel/parseInventario";
+import { fetchInventarioMeta, fetchSapStock, fetchSucursales, replaceInventario } from "@/lib/db/queries";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { decodeSpreadsheetBuffer, isConteoLinea, parseDelimitedText, parseCsvText, resolveInventarioRows } from "@/lib/excel/parseInventario";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 type JsonUpload = {
   fileName?: string;
@@ -12,17 +14,31 @@ type JsonUpload = {
 async function fileToRows(file: File): Promise<unknown[][]> {
   const buffer = Buffer.from(await file.arrayBuffer());
   const utf16 = decodeSpreadsheetBuffer(buffer);
-  if (utf16) return keepConteoSpreadsheet(parseDelimitedText(utf16));
+  if (utf16) return parseDelimitedText(utf16);
 
   const name = file.name.trim().toLowerCase();
   if (name.endsWith(".csv") || name.endsWith(".tsv") || name.endsWith(".txt")) {
-    return keepConteoSpreadsheet(parseCsvText(buffer.toString("utf8")));
+    return parseCsvText(buffer.toString("utf8").replace(/^\uFEFF/, ""));
   }
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
     const readXlsxFile = (await import("read-excel-file/node")).default;
-    return keepConteoSpreadsheet((await readXlsxFile(buffer)) as unknown as unknown[][]);
+    return (await readXlsxFile(buffer)) as unknown as unknown[][];
   }
-  return keepConteoSpreadsheet(parseDelimitedText(buffer.toString("utf8")));
+  return parseDelimitedText(buffer.toString("utf8").replace(/^\uFEFF/, ""));
+}
+
+async function inventarioCounts(supabase: SupabaseClient, detalle: boolean) {
+  const sap = await fetchSapStock(supabase);
+  const skus = new Set(sap.map((p) => p.sku.toUpperCase()));
+  const semanal = new Set(sap.filter((p) => isConteoLinea(p.linea ?? "")).map((p) => p.sku.toUpperCase()));
+  return {
+    productos: detalle ? sap : undefined,
+    skuCount: skus.size,
+    catalogCount: skus.size,
+    semanalCount: semanal.size,
+    sapCount: sap.length,
+    storeCount: new Set(sap.map((p) => p.sucursalId).filter(Boolean)).size,
+  };
 }
 
 async function ingest(resolved: { supabase: import("@supabase/supabase-js").SupabaseClient }, rows: unknown[][], fileName: string) {
@@ -32,21 +48,14 @@ async function ingest(resolved: { supabase: import("@supabase/supabase-js").Supa
     return fail(
       parsed.unmatchedStores.length
         ? `Ninguna sucursal coincidió. Revisa nombres SAP: ${parsed.unmatchedStores.slice(0, 8).join(", ")}.`
-        : "El archivo no tiene materiales L1–L12 (ni líneas en blanco) con SKU.",
+        : "El archivo no tiene materiales con SKU.",
     );
   }
 
   const data = await replaceInventario(resolved.supabase, parsed.productos, fileName);
-  const [catalog, sap] = await Promise.all([
-    fetchProductos(resolved.supabase),
-    fetchSapStock(resolved.supabase),
-  ]);
   return ok({
     ...data,
-    productos: sap,
-    skuCount: catalog.length,
-    catalogCount: catalog.length,
-    sapCount: sap.length,
+    ...(await inventarioCounts(resolved.supabase, true)),
     imported: parsed.productos.length,
     skipped: parsed.skipped,
     matchedStores: parsed.matchedStores,
@@ -54,22 +63,14 @@ async function ingest(resolved: { supabase: import("@supabase/supabase-js").Supa
   });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   try {
-    const [meta, catalog, sap] = await Promise.all([
-      fetchInventarioMeta(resolved.supabase),
-      fetchProductos(resolved.supabase),
-      fetchSapStock(resolved.supabase),
-    ]);
-    return ok({
-      ...meta,
-      productos: sap,
-      skuCount: catalog.length,
-      catalogCount: catalog.length,
-      sapCount: sap.length,
-    });
+    const detalle = new URL(request.url).searchParams.get("detalle") === "1";
+    const meta = await fetchInventarioMeta(resolved.supabase);
+    if (!detalle) return ok(meta);
+    return ok({ ...meta, ...(await inventarioCounts(resolved.supabase, true)) });
   } catch (err) {
     console.error(err);
     return fail("No se pudo leer el inventario.", 500);

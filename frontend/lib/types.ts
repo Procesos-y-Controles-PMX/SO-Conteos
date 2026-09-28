@@ -4,7 +4,7 @@ export type Role = "admin" | "tienda" | "administrador_general";
 
 export type CountKind = "semanal" | "urgente";
 
-export type CountStatus = "pendiente" | "en_progreso" | "enviado";
+export type CountStatus = "pendiente" | "en_progreso" | "enviado" | "no_concluido";
 
 export type Semaforo = "verde" | "rojo" | "ambar";
 
@@ -51,6 +51,8 @@ export type Sucursal = {
   hasAccount: boolean;
   usuarios: Array<{ nombre: string; puesto: string }>;
 };
+
+export const URGENTE_MAX_SKUS = 100;
 
 export type Producto = {
   sku: string;
@@ -105,9 +107,11 @@ export type CountSession = {
   capturaCerradaAt?: string;
   desbloqueadoAt?: string;
   desbloqueadoPor?: string;
+  /** Exclusive end of Lilian's unlock window (CDMX midnight). */
+  desbloqueadoHasta?: string;
   difSkus?: number;
   difMonto?: number;
-  /** Semana pasada sin empezar y sin desbloqueo del admin. */
+  /** Semana pasada sin empezar y sin desbloqueo vigente. */
   bloqueado?: boolean;
   lines: CountLine[];
 };
@@ -150,7 +154,7 @@ export function sessionDiffStats(session: CountSession): { skuCount: number; mon
 }
 
 export function countQtyLocked(session: Pick<CountSession, "status" | "capturaCerradaAt">) {
-  return session.status === "enviado" || Boolean(session.capturaCerradaAt);
+  return session.status === "enviado" || session.status === "no_concluido" || Boolean(session.capturaCerradaAt);
 }
 
 /** Audit photo of the physical count when something was counted. */
@@ -171,21 +175,45 @@ export function lineMissingEvidence(kind: CountKind, line: CountLine) {
   return needEnt || needFac;
 }
 
+/** True when the store already captured quantities or evidence (not just identity). */
+export function sessionWasStarted(session: Pick<CountSession, "lines">) {
+  return session.lines.some(
+    (line) =>
+      line.fisico != null ||
+      (line.pendienteEntregar ?? 0) > 0 ||
+      (line.pendienteFacturar ?? 0) > 0 ||
+      Boolean(line.evidenciaPath) ||
+      Boolean(line.evidenciaEntregarPath) ||
+      Boolean(line.evidenciaFacturarPath),
+  );
+}
+
+export function unlockActivo(
+  session: Pick<CountSession, "desbloqueadoAt" | "desbloqueadoHasta">,
+  now = new Date(),
+) {
+  if (!session.desbloqueadoAt) return false;
+  if (!session.desbloqueadoHasta) return true;
+  return now.getTime() < new Date(session.desbloqueadoHasta).getTime();
+}
+
 /**
- * A weekly count locks once its week is over, unless it was already started
- * or an admin unlocked it for that store.
+ * A weekly count locks once its week is over, unless Lilian unlocked it
+ * and the unlock window is still open.
  */
 export function conteoBloqueado(
-  session: Pick<CountSession, "kind" | "status" | "weekKey" | "desbloqueadoAt">,
+  session: Pick<CountSession, "kind" | "status" | "weekKey" | "desbloqueadoAt" | "desbloqueadoHasta">,
   currentWeekKey = weekKeyFromDate(),
+  now = new Date(),
 ) {
   if (session.kind !== "semanal") return false;
+  if (session.status === "enviado" || session.status === "no_concluido") return false;
   if (session.status !== "pendiente") return false;
-  if (session.desbloqueadoAt) return false;
+  if (unlockActivo(session, now)) return false;
   return session.weekKey < currentWeekKey;
 }
 
-export type WeekState = "enviado" | "abierta" | "bloqueada";
+export type WeekState = "enviado" | "abierta" | "bloqueada" | "no_concluido" | "desbloqueada";
 
 /** State of a store's weekly count in the history; a missing past session counts as locked. */
 export function weekStateFor(
@@ -194,8 +222,14 @@ export function weekStateFor(
   currentWeekKey = weekKeyFromDate(),
 ): WeekState {
   if (session?.status === "enviado") return "enviado";
-  if (session) return conteoBloqueado(session, currentWeekKey) ? "bloqueada" : "abierta";
-  return weekKey < currentWeekKey ? "bloqueada" : "abierta";
+  if (session?.status === "no_concluido") return "no_concluido";
+  const past = weekKey < currentWeekKey;
+  if (session) {
+    if (conteoBloqueado(session, currentWeekKey)) return "bloqueada";
+    if (past && unlockActivo(session)) return "desbloqueada";
+    return "abierta";
+  }
+  return past ? "bloqueada" : "abierta";
 }
 
 export function countProgress(session: CountSession): { filled: number; total: number } {
@@ -206,6 +240,7 @@ export function countProgress(session: CountSession): { filled: number; total: n
 export function sessionSemaforo(session: CountSession | undefined): Semaforo {
   if (!session) return "rojo";
   if (session.status === "enviado") return "verde";
+  if (session.status === "no_concluido") return "rojo";
   if (session.status === "en_progreso") return "ambar";
   return "rojo";
 }

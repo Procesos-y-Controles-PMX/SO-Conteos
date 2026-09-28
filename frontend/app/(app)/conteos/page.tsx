@@ -39,7 +39,7 @@ export default function ConteosHubPage() {
       .catch((err: Error) => setError(err.message));
   }, [sucursalId]);
 
-  const urgentesPendientes = urgentes.filter((s) => s.status !== "enviado");
+  const urgentesPendientes = urgentes.filter((s) => s.status !== "enviado" && s.status !== "no_concluido");
   const urgentePendiente = urgentesPendientes[0] ?? urgentes[0];
   const weeklyProgress = weekly ? countProgress(weekly) : { filled: 0, total: skuCount };
   const weeklyHref = weekly ? `/conteos/${weekly.id}` : "/conteos/semanales";
@@ -101,7 +101,13 @@ export default function ConteosHubPage() {
             />
           </div>
           <p className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-steel">
-            {weekly?.status === "enviado" ? "Ver enviado" : weeklyProgress.filled > 0 ? "Continuar" : "Empezar"}
+            {weekly?.status === "enviado"
+              ? "Ver enviado"
+              : weekly?.status === "no_concluido"
+                ? "Ver no concluido"
+                : weeklyProgress.filled > 0
+                  ? "Continuar"
+                  : "Empezar"}
             <ChevronRight className="h-4 w-4" />
           </p>
         </button>

@@ -98,3 +98,63 @@ export function isWithinUploadWindow(startHHmm: string, endHHmm: string, date = 
   if (start <= end) return now >= start && now < end;
   return now >= start || now < end;
 }
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+/** Instant when America/Mexico_City is at 00:00 on the given calendar day. */
+export function mexicoMidnightUtc(year: number, month: number, day: number): Date {
+  const ymd = `${year}-${pad2(month)}-${pad2(day)}`;
+  for (const offset of ["-06:00", "-05:00"] as const) {
+    const candidate = new Date(`${ymd}T00:00:00${offset}`);
+    const bag = partsInMexico(candidate);
+    const { hour } = mexicoHourMinutes(candidate);
+    if (bag.year === String(year) && bag.month === pad2(month) && bag.day === pad2(day) && hour === 0) {
+      return candidate;
+    }
+  }
+  return new Date(`${ymd}T00:00:00-06:00`);
+}
+
+/**
+ * Deadline for a week: end of Saturday = Sunday 00:00 CDMX
+ * (Monday + 6 days at midnight).
+ */
+export function weekCloseAt(weekKey: string): Date | null {
+  const monday = mondayFromWeekKey(weekKey);
+  if (!monday) return null;
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  return mexicoMidnightUtc(sunday.getUTCFullYear(), sunday.getUTCMonth() + 1, sunday.getUTCDate());
+}
+
+export function weekDeadlinePassed(weekKey: string, now = new Date()) {
+  const closeAt = weekCloseAt(weekKey);
+  return Boolean(closeAt && now.getTime() >= closeAt.getTime());
+}
+
+/** Exclusive end of an unlock window: start date (CDMX) + durationDays at midnight. */
+export function unlockUntilFromStart(startYmd: string, durationDays: number): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(startYmd.trim());
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (!Number.isFinite(durationDays) || durationDays < 1 || durationDays > 90) return null;
+  let y = year;
+  let mo = month;
+  let d = day;
+  for (let i = 0; i < durationDays; i += 1) {
+    const probe = new Date(Date.UTC(y, mo - 1, d + 1, 12));
+    y = probe.getUTCFullYear();
+    mo = probe.getUTCMonth() + 1;
+    d = probe.getUTCDate();
+  }
+  return mexicoMidnightUtc(y, mo, d);
+}
+
+export function todayYmdMexico(date = new Date()) {
+  const bag = partsInMexico(date);
+  return `${bag.year}-${bag.month}-${bag.day}`;
+}

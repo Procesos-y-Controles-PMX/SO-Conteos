@@ -44,7 +44,7 @@ create table if not exists cnt_conteos (
   id_sucursal uuid not null references ctz_sucursales (id) on delete cascade,
   week_key text not null,
   titulo text not null,
-  status text not null default 'pendiente' check (status in ('pendiente', 'en_progreso', 'enviado')),
+  status text not null default 'pendiente' check (status in ('pendiente', 'en_progreso', 'enviado', 'no_concluido')),
   counter_name text,
   counter_puesto text,
   comentario text,
@@ -53,6 +53,7 @@ create table if not exists cnt_conteos (
   captura_cerrada_at timestamptz,
   desbloqueado_at timestamptz,
   desbloqueado_por text,
+  desbloqueado_hasta timestamptz,
   dif_skus integer,
   dif_monto numeric
 );

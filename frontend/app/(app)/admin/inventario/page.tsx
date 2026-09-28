@@ -7,18 +7,22 @@ import { getInventario, uploadInventario } from "@/lib/store";
 import type { InventarioMeta, Producto } from "@/lib/types";
 import { formatDateTime, formatNumber } from "@/lib/utils";
 
+const MAX_FILAS = 500;
+
 export default function InventarioAdminPage() {
   const [meta, setMeta] = useState<InventarioMeta | null>(null);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [catalogCount, setCatalogCount] = useState(0);
+  const [semanalCount, setSemanalCount] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [filter, setFilter] = useState("");
 
   useEffect(() => {
-    void getInventario().then((data) => {
+    void getInventario({ detalle: true }).then((data) => {
       setMeta(data.meta);
       setProductos(data.productos ?? []);
       setCatalogCount(data.catalogCount ?? data.skuCount ?? 0);
+      setSemanalCount(data.semanalCount ?? 0);
     });
   }, []);
 
@@ -52,6 +56,7 @@ export default function InventarioAdminPage() {
       setMeta(data.meta);
       setProductos(data.productos ?? []);
       setCatalogCount(data.catalogCount ?? data.skuCount ?? 0);
+      setSemanalCount(data.semanalCount ?? 0);
       const unmatched = data.unmatchedStores ?? [];
       toast.success(
         `${data.imported ?? 0} filas · ${data.matchedStores ?? 0} sucursales${
@@ -73,7 +78,7 @@ export default function InventarioAdminPage() {
       <PageHeader
         eyebrow="Administración"
         title="Inventario y costos"
-        subtitle="Sube el inventario nacional SAP. El semanal usa L1–L12 (y líneas en blanco) de cada sucursal."
+        subtitle="Sube el inventario nacional SAP completo. El semanal usa solo L1–L12 (y líneas en blanco); los urgentes pueden elegir cualquier SKU."
       />
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -91,7 +96,9 @@ export default function InventarioAdminPage() {
           <p className="mt-2 font-display text-xl font-semibold tabular-nums text-fg">
             {catalogCount} / {productos.length} / {storeCount || "—"}
           </p>
-          <p className="mt-1 text-sm text-fg-subtle">L1–L12 + sin tag · teórico por tienda.</p>
+          <p className="mt-1 text-sm text-fg-subtle">
+            {semanalCount} SKUs entran al semanal (L1–L12 + sin tag) · teórico por tienda.
+          </p>
         </article>
       </div>
 
@@ -100,7 +107,7 @@ export default function InventarioAdminPage() {
           {uploading ? "Leyendo archivo…" : "Subir inventario nacional"}
         </span>
         <span className="text-center text-sm text-fg-subtle">
-          Excel SAP (todas las sucursales). Columna C = sucursal; Línea L01–L12 o vacía.
+          Excel o CSV SAP (todas las sucursales y todas las líneas).
         </span>
         <input
           type="file"
@@ -147,7 +154,7 @@ export default function InventarioAdminPage() {
                 </td>
               </tr>
             ) : (
-              visible.map((p) => (
+              visible.slice(0, MAX_FILAS).map((p) => (
                 <tr key={`${p.sucursalId ?? ""}-${p.sku}`} className="border-t border-line-subtle">
                   <td className="px-4 py-2.5">{p.sucursalNombre ?? "—"}</td>
                   <td className="px-4 py-2.5 font-mono text-xs text-fg-subtle">{p.linea || "—"}</td>
@@ -162,6 +169,12 @@ export default function InventarioAdminPage() {
           </tbody>
         </table>
       </div>
+      {visible.length > MAX_FILAS ? (
+        <p className="mt-2 text-sm text-fg-subtle">
+          Mostrando {formatNumber(MAX_FILAS, 0)} de {formatNumber(visible.length, 0)} filas. Usa el filtro para
+          encontrar el resto.
+        </p>
+      ) : null}
     </div>
   );
 }

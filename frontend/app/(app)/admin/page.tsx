@@ -9,7 +9,8 @@ import WeekBoard, { WeekBoardSkeleton } from "@/components/conteos/WeekBoard";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
 import { getCurrentUser } from "@/lib/auth";
-import { deleteConteo, fetchSemaforo, unlockWeek } from "@/lib/store";
+import { isUnlockAdmin } from "@/lib/access";
+import { deleteConteo, fetchSemaforo, relockWeek, unlockWeek } from "@/lib/store";
 import {
   weekStateFor,
   type WeekState,
@@ -20,7 +21,7 @@ import {
   type ZonaSemaforo,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { weekKeyFromDate, weekLabel } from "@/lib/week";
+import { todayYmdMexico, weekKeyFromDate, weekLabel } from "@/lib/week";
 
 const ORDER: Semaforo[] = ["verde", "ambar", "rojo"];
 const ZONA_STORAGE_KEY = "so-conteos-semaforo-zona";
@@ -52,6 +53,8 @@ function zonaListLabel(zonas: string[]) {
 
 export default function AdminSemaforoPage() {
   const weekKey = weekKeyFromDate();
+  const user = getCurrentUser();
+  const canManageUnlock = isUnlockAdmin(user);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [sessions, setSessions] = useState<CountSession[]>([]);
   const [zonaOpciones, setZonaOpciones] = useState<ZonaSemaforo[]>([]);
@@ -66,7 +69,11 @@ export default function AdminSemaforoPage() {
   const [historyWeeks, setHistoryWeeks] = useState<string[]>([]);
   const [history, setHistory] = useState<CountSession[]>([]);
   const [unlocking, setUnlocking] = useState<{ sucursal: Sucursal; weekKey: string } | null>(null);
+  const [unlockStart, setUnlockStart] = useState(todayYmdMexico());
+  const [unlockDays, setUnlockDays] = useState(3);
   const [unlockPending, setUnlockPending] = useState(false);
+  const [relocking, setRelocking] = useState<{ sucursal: Sucursal; weekKey: string } | null>(null);
+  const [relockPending, setRelockPending] = useState(false);
 
   useEffect(() => {
     const saved = zonaStorageRead();
@@ -141,17 +148,39 @@ export default function AdminSemaforoPage() {
   }
 
   async function confirmUnlock() {
-    if (!unlocking) return;
+    if (!unlocking || !user?.email) return;
     setUnlockPending(true);
     try {
-      await unlockWeek(unlocking.sucursal.id, unlocking.weekKey, getCurrentUser()?.nombre ?? "");
-      toast.success(`${unlocking.sucursal.nombre}: ${weekLabel(unlocking.weekKey)} desbloqueada.`);
+      await unlockWeek(unlocking.sucursal.id, unlocking.weekKey, {
+        email: user.email,
+        por: user.nombre || user.email,
+        startDate: unlockStart,
+        days: unlockDays,
+      });
+      toast.success(
+        `${unlocking.sucursal.nombre}: ${weekLabel(unlocking.weekKey)} desbloqueada por ${unlockDays} día(s).`,
+      );
       setUnlocking(null);
       await refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo desbloquear.");
     } finally {
       setUnlockPending(false);
+    }
+  }
+
+  async function confirmRelock() {
+    if (!relocking || !user?.email) return;
+    setRelockPending(true);
+    try {
+      await relockWeek(relocking.sucursal.id, relocking.weekKey, user.email);
+      toast.success(`${relocking.sucursal.nombre}: ${weekLabel(relocking.weekKey)} vuelve a estar bloqueada.`);
+      setRelocking(null);
+      await refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo bloquear.");
+    } finally {
+      setRelockPending(false);
     }
   }
 
@@ -288,7 +317,17 @@ export default function AdminSemaforoPage() {
                 rows={group.rows}
                 historyWeeks={historyWeeks}
                 onDelete={(session, nombre) => setPending({ session, nombre })}
-                onUnlock={(sucursal, key) => setUnlocking({ sucursal, weekKey: key })}
+                onUnlock={
+                  canManageUnlock
+                    ? (sucursal, key) => {
+                        setUnlockStart(todayYmdMexico());
+                        setUnlockDays(3);
+                        setUnlocking({ sucursal, weekKey: key });
+                      }
+                    : undefined
+                }
+                onRelock={canManageUnlock ? (sucursal, key) => setRelocking({ sucursal, weekKey: key }) : undefined}
+                canManageUnlock={canManageUnlock}
               />
             ))
           )}
@@ -307,14 +346,57 @@ export default function AdminSemaforoPage() {
       <ConfirmDialog
         open={Boolean(unlocking)}
         title="Desbloquear semana"
-        body={`${unlocking?.sucursal.nombre ?? "La sucursal"} podrá capturar el conteo de ${
-          unlocking ? weekLabel(unlocking.weekKey) : "esa semana"
-        }.`}
+        body={
+          unlocking ? (
+            <span className="block space-y-3">
+              <span className="block">
+                {unlocking.sucursal.nombre} podrá capturar el conteo de {weekLabel(unlocking.weekKey)}.
+              </span>
+              <label className="block">
+                <span className="field-label mb-1.5 block">Fecha inicial</span>
+                <input
+                  type="date"
+                  className="input-field"
+                  value={unlockStart}
+                  onChange={(e) => setUnlockStart(e.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="field-label mb-1.5 block">Días que dura</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={90}
+                  className="input-field"
+                  value={unlockDays}
+                  onChange={(e) => setUnlockDays(Math.max(1, Math.min(90, Number(e.target.value) || 1)))}
+                />
+              </label>
+            </span>
+          ) : (
+            ""
+          )
+        }
         confirmLabel="Desbloquear"
         cancelLabel="Cancelar"
         pending={unlockPending}
         onCancel={() => setUnlocking(null)}
         onConfirm={() => void confirmUnlock()}
+      />
+
+      <ConfirmDialog
+        open={Boolean(relocking)}
+        title="Volver a bloquear"
+        body={
+          relocking
+            ? `${relocking.sucursal.nombre}: ${weekLabel(relocking.weekKey)} vuelve a quedar bloqueada.`
+            : ""
+        }
+        confirmLabel="Bloquear"
+        cancelLabel="Cancelar"
+        pending={relockPending}
+        onCancel={() => setRelocking(null)}
+        onConfirm={() => void confirmRelock()}
       />
     </div>
   );

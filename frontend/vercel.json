@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/evidencia",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/cierre-conteos",
+      "schedule": "5 * * * *"
     }
   ]
 }

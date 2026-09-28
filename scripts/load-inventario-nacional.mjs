@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Applies per-sucursal inventory schema (if the DB URL is available) and
- * loads L1–L12 (+ blank) rows from the national SAP TSV.
+ * loads every line from the national SAP file (TSV .xls or CSV).
+ * The weekly count filters to L1–L12 (+ blank) at read time.
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -103,13 +104,24 @@ function matchSucursalId(rawName, sucursales) {
   if (scored[0].score > scored[1].score) return scored[0].s.id;
   return null;
 }
-function isConteoLinea(raw) {
-  const tag = raw.trim().toUpperCase();
-  if (!tag) return true;
-  const match = /^L0?(\d+)$/.exec(tag);
-  if (!match) return false;
-  const n = Number(match[1]);
-  return n >= 1 && n <= 12;
+function splitCsvLine(line, delimiter) {
+  const cells = [];
+  let current = "";
+  let quoted = false;
+  for (const ch of line) {
+    if (ch === '"') {
+      quoted = !quoted;
+      continue;
+    }
+    if (ch === delimiter && !quoted) {
+      cells.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  cells.push(current.trim());
+  return cells;
 }
 function parseNumber(raw) {
   if (!raw) return 0;
@@ -123,13 +135,14 @@ function parseFile(path) {
   if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) {
     text = buf.toString("utf16le").replace(/^\uFEFF/, "");
   } else {
-    text = buf.toString("utf8");
+    text = buf.toString("utf8").replace(/^\uFEFF/, "");
   }
-  const rows = text
+  const sample = text.slice(0, 2000);
+  const delimiter = sample.split("\t").length > sample.split(",").length ? "\t" : ",";
+  return text
     .split(/\r?\n/)
     .filter((line) => line.trim().length)
-    .map((line) => line.split("\t").map((c) => c.trim().replace(/^"+|"+$/g, "")));
-  return rows;
+    .map((line) => splitCsvLine(line, delimiter));
 }
 
 async function ensureSchema() {
@@ -157,14 +170,15 @@ async function ensureSchema() {
 
 const rows = parseFile(FILE);
 const header = rows[0] ?? [];
-const col = (name) => header.findIndex((h) => h.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() === name);
+const col = (...names) =>
+  header.findIndex((h) => names.includes(h.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim()));
 const storeCol = col("nombre 1");
 const lineaCol = col("linea");
 const skuCol = col("material");
 const nombreCol = col("texto breve de material");
 const umCol = col("umb");
 const teoricoCol = col("libre utilizacion");
-const costoCol = col("costo prom unitario");
+const costoCol = col("costo unit", "costo unitario", "costo prom unitario");
 if (storeCol < 0 || skuCol < 0) {
   console.error("Unexpected headers", header);
   process.exit(1);
@@ -184,10 +198,6 @@ for (const row of rows.slice(1)) {
   const sku = row[skuCol] ?? "";
   const storeRaw = row[storeCol] ?? "";
   const linea = (lineaCol >= 0 ? row[lineaCol] ?? "" : "").toUpperCase();
-  if (!isConteoLinea(linea)) {
-    skipped += 1;
-    continue;
-  }
   if (!sku) {
     skipped += 1;
     continue;
@@ -223,29 +233,19 @@ if (unmatched.size) console.log("Unmatched:", [...unmatched].sort().join(" | "))
 
 await ensureSchema();
 
-const ajuste = await rest(
-  "POST",
-  "/rest/v1/cnt_ajustes",
-  { clave: "inventario_por_sucursal", valor: productos },
-  { Prefer: "resolution=merge-duplicates,return=minimal" },
-);
-if (!ajuste.ok) {
-  console.error("Ajustes upsert failed", ajuste.status, ajuste.text.slice(0, 800));
-  process.exit(1);
-}
-console.log("Saved inventario_por_sucursal in cnt_ajustes");
+const wipe = await rest("DELETE", "/rest/v1/cnt_inventario_sku?sku=neq.__none__");
+console.log("Wipe", wipe.status, wipe.ok ? "ok" : wipe.text.slice(0, 400));
 
-const wipe2 = await rest("DELETE", "/rest/v1/cnt_inventario_sku?sku=neq.__none__");
-console.log("Wipe", wipe2.status, wipe2.ok ? "ok" : wipe2.text.slice(0, 400));
-
+let tablaOk = wipe.ok;
 const now = new Date().toISOString();
-const chunk = 200;
-for (let i = 0; i < productos.length; i += chunk) {
+const chunk = 500;
+for (let i = 0; tablaOk && i < productos.length; i += chunk) {
   const slice = productos.slice(i, i + chunk).map((p) => ({ ...p, updated_at: now }));
   const ins = await rest("POST", "/rest/v1/cnt_inventario_sku", slice);
   if (!ins.ok) {
     if (ins.text.includes("id_sucursal") || ins.text.includes("PGRST204")) {
-      console.log("cnt_inventario_sku still on the old schema; app will read cnt_ajustes.");
+      console.log("cnt_inventario_sku still on the old schema; falling back to cnt_ajustes.");
+      tablaOk = false;
       break;
     }
     console.error("Insert failed", ins.status, ins.text.slice(0, 800));
@@ -254,8 +254,24 @@ for (let i = 0; i < productos.length; i += chunk) {
   console.log(`Inserted ${Math.min(i + chunk, productos.length)}/${productos.length}`);
 }
 
-const carga = await rest("POST", "/rest/v1/cnt_inventario_carga", { file_name: "inventario nacional.xls" });
-console.log("Carga log", carga.status, carga.ok ? "ok" : carga.text.slice(0, 400));
+if (tablaOk) {
+  const del = await rest("DELETE", "/rest/v1/cnt_ajustes?clave=eq.inventario_por_sucursal");
+  console.log("Cleared cnt_ajustes inventario_por_sucursal", del.status);
+} else {
+  const ajuste = await rest(
+    "POST",
+    "/rest/v1/cnt_ajustes",
+    { clave: "inventario_por_sucursal", valor: productos },
+    { Prefer: "resolution=merge-duplicates,return=minimal" },
+  );
+  if (!ajuste.ok) {
+    console.error("Ajustes upsert failed", ajuste.status, ajuste.text.slice(0, 800));
+    process.exit(1);
+  }
+  console.log("Saved inventario_por_sucursal in cnt_ajustes");
+}
 
-const check = await rest("GET", "/rest/v1/cnt_ajustes?clave=eq.inventario_por_sucursal&select=clave");
-console.log("Ajustes row:", check.status, check.ok ? `${productos.length} SKU-sucursal rows stored` : check.text.slice(0, 400));
+const fileName = FILE.split("/").pop() || "inventario nacional";
+const carga = await rest("POST", "/rest/v1/cnt_inventario_carga", { file_name: fileName });
+console.log("Carga log", carga.status, carga.ok ? "ok" : carga.text.slice(0, 400));
+console.log(`${productos.length} SKU-sucursal rows stored in ${tablaOk ? "cnt_inventario_sku" : "cnt_ajustes"}`);

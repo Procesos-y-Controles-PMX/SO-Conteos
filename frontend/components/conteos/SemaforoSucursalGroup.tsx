@@ -64,7 +64,11 @@ function CountAction({
 }
 
 function weeklyLabel(weekly: CountSession) {
-  return weekly.status === "enviado" ? "Ver enviado" : "Ver semanal";
+  return weekly.status === "enviado"
+    ? "Ver enviado"
+    : weekly.status === "no_concluido"
+      ? "Ver no concluido"
+      : "Ver semanal";
 }
 
 function difCopy(weekly?: CountSession) {
@@ -199,6 +203,8 @@ function SucursalCard({
   historyWeeks,
   onDelete,
   onUnlock,
+  onRelock,
+  canManageUnlock = false,
 }: {
   sucursal: Sucursal;
   weekly?: CountSession;
@@ -207,6 +213,8 @@ function SucursalCard({
   historyWeeks: string[];
   onDelete: (session: CountSession, nombre: string) => void;
   onUnlock?: (sucursal: Sucursal, weekKey: string) => void;
+  onRelock?: (sucursal: Sucursal, weekKey: string) => void;
+  canManageUnlock?: boolean;
 }) {
   const status = sessionSemaforo(weekly);
 
@@ -241,7 +249,9 @@ function SucursalCard({
           <WeekHistory
             weeks={historyWeeks}
             stateByWeek={stateByWeek}
+            canManageUnlock={canManageUnlock}
             onUnlock={onUnlock ? (weekKey) => onUnlock(sucursal, weekKey) : undefined}
+            onRelock={onRelock ? (weekKey) => onRelock(sucursal, weekKey) : undefined}
           />
         </div>
         <div className="mt-3 space-y-2">
@@ -274,6 +284,8 @@ function SucursalRow({
   historyWeeks,
   onDelete,
   onUnlock,
+  onRelock,
+  canManageUnlock = false,
   enterDelay = 0,
 }: {
   sucursal: Sucursal;
@@ -283,6 +295,8 @@ function SucursalRow({
   historyWeeks: string[];
   onDelete: (session: CountSession, nombre: string) => void;
   onUnlock?: (sucursal: Sucursal, weekKey: string) => void;
+  onRelock?: (sucursal: Sucursal, weekKey: string) => void;
+  canManageUnlock?: boolean;
   enterDelay?: number;
 }) {
   const status = sessionSemaforo(weekly);
@@ -305,7 +319,9 @@ function SucursalRow({
           <WeekHistory
             weeks={historyWeeks}
             stateByWeek={stateByWeek}
+            canManageUnlock={canManageUnlock}
             onUnlock={onUnlock ? (weekKey) => onUnlock(sucursal, weekKey) : undefined}
+            onRelock={onRelock ? (weekKey) => onRelock(sucursal, weekKey) : undefined}
             compact
           />
         </td>
@@ -358,6 +374,8 @@ export default function SemaforoSucursalGroup({
   historyWeeks,
   onDelete,
   onUnlock,
+  onRelock,
+  canManageUnlock = false,
   loading = false,
   placeholderCount = 8,
 }: {
@@ -366,6 +384,8 @@ export default function SemaforoSucursalGroup({
   historyWeeks: string[];
   onDelete: (session: CountSession, nombre: string) => void;
   onUnlock?: (sucursal: Sucursal, weekKey: string) => void;
+  onRelock?: (sucursal: Sucursal, weekKey: string) => void;
+  canManageUnlock?: boolean;
   loading?: boolean;
   placeholderCount?: number;
 }) {
@@ -395,6 +415,8 @@ export default function SemaforoSucursalGroup({
                 historyWeeks={historyWeeks}
                 onDelete={onDelete}
                 onUnlock={onUnlock}
+                onRelock={onRelock}
+                canManageUnlock={canManageUnlock}
               />
             ))}
       </div>
@@ -427,6 +449,8 @@ export default function SemaforoSucursalGroup({
                     historyWeeks={historyWeeks}
                     onDelete={onDelete}
                     onUnlock={onUnlock}
+                onRelock={onRelock}
+                canManageUnlock={canManageUnlock}
                     enterDelay={Math.min(i, 12) * 22}
                   />
                 ))}

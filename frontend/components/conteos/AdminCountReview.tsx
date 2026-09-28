@@ -13,6 +13,7 @@ const STATUS_TITLE: Record<CountSession["status"], string> = {
   pendiente: "Aún no empieza",
   en_progreso: "En captura en sucursal",
   enviado: "Conteo registrado",
+  no_concluido: "No concluido",
 };
 
 export default function AdminCountReview({
@@ -44,9 +45,13 @@ export default function AdminCountReview({
           <SemaforoDot value={sessionSemaforo(session)} size="lg" />
           <h2 className="mt-3 font-display text-2xl font-semibold text-fg">{STATUS_TITLE[session.status]}</h2>
           <p className="mt-2 text-sm text-fg-subtle">{who}</p>
-          {session.status !== "enviado" ? (
+          {session.status !== "enviado" && session.status !== "no_concluido" ? (
             <p className="mt-2 text-sm text-fg-subtle">
               La captura la hace la sucursal. Desde aquí solo puedes revisar y borrar.
+            </p>
+          ) : session.status === "no_concluido" ? (
+            <p className="mt-2 text-sm text-fg-subtle">
+              Se cerró el sábado a medianoche. Comentario: {session.comentario || "no concluido"}.
             </p>
           ) : null}
         </div>

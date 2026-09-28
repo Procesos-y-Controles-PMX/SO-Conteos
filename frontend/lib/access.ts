@@ -3,6 +3,9 @@ import type { Role, SessionUser } from "./types";
 /** Allowlist-only. Not a value in ctz_usuarios.rol (shared with Cotizador). */
 export const MAJOR_ADMIN_EMAILS = ["fernando.corella@ext.cemex.com"] as const;
 
+/** Only this account can unlock / re-lock past weeks (sello de la casa). */
+export const UNLOCK_ADMIN_EMAIL = "sandralilian.deleon@cemex.com";
+
 const MAJOR_ADMIN_EMAIL_SET = new Set(MAJOR_ADMIN_EMAILS.map((email) => email.trim().toLowerCase()));
 
 export function normalizeEmail(email: string | null | undefined) {
@@ -11,6 +14,14 @@ export function normalizeEmail(email: string | null | undefined) {
 
 export function isMajorAdminEmail(email: string | null | undefined) {
   return MAJOR_ADMIN_EMAIL_SET.has(normalizeEmail(email));
+}
+
+export function isUnlockAdminEmail(email: string | null | undefined) {
+  return normalizeEmail(email) === UNLOCK_ADMIN_EMAIL;
+}
+
+export function isUnlockAdmin(user: Pick<SessionUser, "email"> | null | undefined) {
+  return isUnlockAdminEmail(user?.email);
 }
 
 export function resolveSessionRole(email: string | undefined, dbRol: Role): Role {

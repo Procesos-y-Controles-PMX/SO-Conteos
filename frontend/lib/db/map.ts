@@ -35,6 +35,7 @@ export type CntConteoRow = {
   captura_cerrada_at?: string | null;
   desbloqueado_at?: string | null;
   desbloqueado_por?: string | null;
+  desbloqueado_hasta?: string | null;
   dif_skus?: number | null;
   dif_monto?: number | string | null;
 };
@@ -161,6 +162,7 @@ export function mapSession(
     capturaCerradaAt: row.captura_cerrada_at ?? undefined,
     desbloqueadoAt: row.desbloqueado_at ?? undefined,
     desbloqueadoPor: row.desbloqueado_por ?? undefined,
+    desbloqueadoHasta: row.desbloqueado_hasta ?? undefined,
     difSkus: row.dif_skus ?? undefined,
     difMonto: num(row.dif_monto) ?? undefined,
     bloqueado: conteoBloqueado({
@@ -168,6 +170,7 @@ export function mapSession(
       status: row.status,
       weekKey: row.week_key,
       desbloqueadoAt: row.desbloqueado_at ?? undefined,
+      desbloqueadoHasta: row.desbloqueado_hasta ?? undefined,
     }),
     lines,
   };

@@ -117,7 +117,7 @@ export default function CountSessionPage() {
     void getSession(params.id)
       .then((found) => {
         setSession(scopeWeeklySession(found));
-        if (found.status === "enviado") setStep("enviado");
+        if (found.status === "enviado" || found.status === "no_concluido") setStep("enviado");
         else if (found.capturaCerradaAt) setStep("revision_diffs");
         else if (found.counterName && found.counterPuesto) setStep("conteo");
         else setStep("identidad");
@@ -149,7 +149,7 @@ export default function CountSessionPage() {
   const adminView = isConteosAdmin(user?.rol);
   const { filled, total } = countProgress(current);
   const safeIndex = Math.min(skuIndex, Math.max(0, current.lines.length - 1));
-  const locked = current.status === "enviado";
+  const locked = current.status === "enviado" || current.status === "no_concluido";
   const qtyLocked = countQtyLocked(current);
   const hubHref = current.kind === "semanal" ? "/conteos/semanales" : "/conteos/urgentes";
 
@@ -383,12 +383,18 @@ export default function CountSessionPage() {
       {step === "enviado" ? (
         <div className="mx-auto max-w-lg space-y-4">
           <div className="neu-raised rounded-lg p-6 text-center">
-            <p className="field-label">Enviado</p>
-            <h2 className="mt-1 font-display text-2xl font-semibold text-fg">Conteo registrado</h2>
+            <p className="field-label">{current.status === "no_concluido" ? "No concluido" : "Enviado"}</p>
+            <h2 className="mt-1 font-display text-2xl font-semibold text-fg">
+              {current.status === "no_concluido" ? "Conteo no concluido" : "Conteo registrado"}
+            </h2>
             <p className="mt-2 text-sm text-fg-subtle">
               {current.counterName} · {current.counterPuesto}
             </p>
-            <p className="mt-2 text-sm text-fg-subtle">Ya no se puede editar este conteo.</p>
+            <p className="mt-2 text-sm text-fg-subtle">
+              {current.status === "no_concluido"
+                ? "Se cerró el sábado a medianoche porque quedó empezado y sin enviar."
+                : "Ya no se puede editar este conteo."}
+            </p>
           </div>
           <DiffReview session={current} mode="diferencias" readOnly />
           <button type="button" className="btn-secondary w-full" onClick={() => router.push("/conteos")}>

@@ -5,8 +5,10 @@ export async function GET(request: Request) {
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   try {
-    const sucursalId = new URL(request.url).searchParams.get("sucursalId")?.trim() || undefined;
-    const productos = await fetchProductos(resolved.supabase, sucursalId);
+    const params = new URL(request.url).searchParams;
+    const sucursalId = params.get("sucursalId")?.trim() || undefined;
+    const alcance = params.get("alcance") === "todos" ? "todos" : "semanal";
+    const productos = await fetchProductos(resolved.supabase, sucursalId, alcance);
     return ok({ productos });
   } catch (err) {
     console.error(err);

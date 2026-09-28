@@ -23,7 +23,16 @@ const TEORICO_HEADERS = [
   "libre utilizacion",
   "existencia",
 ];
-const COSTO_HEADERS = ["costo", "precio", "valor", "value unrestricted", "precio base", "costo prom unitario"];
+const COSTO_HEADERS = [
+  "costo unit",
+  "costo unitario",
+  "costo prom unitario",
+  "costo",
+  "precio",
+  "valor",
+  "value unrestricted",
+  "precio base",
+];
 const STORE_HEADERS = ["nombre 1", "sucursal", "tienda", "plant", "centro nombre"];
 const LINEA_HEADERS = ["linea", "línea", "line", "tag"];
 
@@ -126,10 +135,6 @@ export function resolveInventarioRows(rows: unknown[][], sucursales: NamedStore[
     const teoricoRaw = teoricoCol >= 0 ? cell(row[teoricoCol]) : "";
     const costoRaw = costoCol >= 0 ? cell(row[costoCol]) : "";
     if (!sku && !storeRaw && !nombre && !um && !teoricoRaw && !costoRaw) continue;
-    if (!isConteoLinea(linea)) {
-      skipped += 1;
-      continue;
-    }
     if (!sku) {
       skipped += 1;
       continue;
@@ -215,18 +220,6 @@ export function decodeSpreadsheetBuffer(bytes: Uint8Array | Buffer): string | nu
     return new TextDecoder("utf-16le").decode(swapped);
   }
   return null;
-}
-
-/** Drop L13+ (hardware bulk, etc.) so the upload stays small. */
-export function keepConteoSpreadsheet(rows: unknown[][]): unknown[][] {
-  if (rows.length < 2) return rows;
-  const lineaCol = findCol(rows[0] ?? [], LINEA_HEADERS);
-  const kept: unknown[][] = [rows[0] ?? []];
-  for (const row of rows.slice(1)) {
-    const linea = lineaCol >= 0 ? cell(row[lineaCol]) : "";
-    if (isConteoLinea(linea)) kept.push(row);
-  }
-  return kept;
 }
 
 export function parseCsvText(text: string): unknown[][] {

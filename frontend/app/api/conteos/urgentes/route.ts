@@ -1,5 +1,6 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
-import { fetchProductos, fetchSession, fetchSucursalById } from "@/lib/db/queries";
+import { fetchProductos, fetchSession, fetchSucursalById, insertSessionLines } from "@/lib/db/queries";
+import { URGENTE_MAX_SKUS } from "@/lib/types";
 import { weekKeyFromDate } from "@/lib/week";
 
 export async function POST(request: Request) {
@@ -9,7 +10,9 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { sucursalId?: string; titulo?: string; skus?: string[] };
     if (!body.sucursalId || !body.skus?.length) return fail("Sucursal y productos requeridos.");
-    const productos = (await fetchProductos(supabase, body.sucursalId)).filter((p) => body.skus!.includes(p.sku));
+    const wanted = new Set(body.skus);
+    if (wanted.size > URGENTE_MAX_SKUS) return fail(`Un urgente puede tener máximo ${URGENTE_MAX_SKUS} SKUs.`);
+    const productos = (await fetchProductos(supabase, body.sucursalId, "todos")).filter((p) => wanted.has(p.sku));
     if (!productos.length) return fail("Ningún SKU válido.");
 
     const sucursal = await fetchSucursalById(supabase, body.sucursalId);
@@ -27,18 +30,7 @@ export async function POST(request: Request) {
       .single();
     if (error) throw error;
 
-    const { error: lineError } = await supabase.from("cnt_conteo_lineas").insert(
-      productos.map((p) => ({
-        id_conteo: created.id,
-        sku: p.sku,
-        nombre: p.nombre,
-        um: p.um,
-        teorico: p.teorico,
-        pendiente_entregar: 0,
-        pendiente_facturar: 0,
-      })),
-    );
-    if (lineError) throw lineError;
+    await insertSessionLines(supabase, created.id, productos);
 
     const session = await fetchSession(supabase, created.id);
     return ok({ session, gerenteEmail: sucursal?.gerenteEmail ?? null });

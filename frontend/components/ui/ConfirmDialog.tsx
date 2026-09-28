@@ -51,7 +51,7 @@ export default function ConfirmDialog({
         <h2 id="confirm-dialog-title" className="font-display text-lg font-semibold text-fg">
           {title}
         </h2>
-        <p className="mt-2 text-sm text-fg-subtle">{body}</p>
+        <div className="mt-2 text-sm text-fg-subtle">{body}</div>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:gap-3">
           <button
             type="button"

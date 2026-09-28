@@ -23,7 +23,9 @@ function resumenFor(sucursales: Sucursal[], sessions: CountSession[]): SemaforoR
     contado,
     curso,
     pendiente,
-    urgentesAbiertos: sessions.filter((s) => s.kind === "urgente" && s.status !== "enviado").length,
+    urgentesAbiertos: sessions.filter(
+      (s) => s.kind === "urgente" && s.status !== "enviado" && s.status !== "no_concluido",
+    ).length,
   };
 }
 

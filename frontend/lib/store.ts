@@ -1,4 +1,4 @@
-import { decodeSpreadsheetBuffer, keepConteoSpreadsheet, parseDelimitedText } from "@/lib/excel/parseInventario";
+import { decodeSpreadsheetBuffer, parseDelimitedText } from "@/lib/excel/parseInventario";
 import { EVIDENCE_MAX_BYTES, isAllowedEvidenceMime, mimeFromFileName } from "@/lib/evidence";
 import type { SoAccount, SoAccountsSourceStatus } from "@/lib/so-account-types";
 import type { CountKind, CountLine, CountSession, CtzUsuario, InventarioMeta, Producto, SemaforoResumen, Sucursal, ZonaSemaforo } from "@/lib/types";
@@ -9,7 +9,9 @@ export type InventarioPayload = {
   productos?: Producto[];
   skuCount?: number;
   catalogCount?: number;
+  semanalCount?: number;
   sapCount?: number;
+  storeCount?: number;
   unmatchedStores?: string[];
   matchedStores?: number;
   imported?: number;
@@ -89,21 +91,26 @@ export async function deleteUsuario(id: string): Promise<void> {
   }));
 }
 
-export async function listProductos(sucursalId?: string): Promise<Producto[]> {
-  const q = sucursalId ? `?sucursalId=${encodeURIComponent(sucursalId)}` : "";
-  const data = await parse<{ productos: Producto[] }>(await fetch(`/api/productos${q}`));
+export async function listProductos(sucursalId?: string, alcance: "semanal" | "todos" = "semanal"): Promise<Producto[]> {
+  const q = new URLSearchParams();
+  if (sucursalId) q.set("sucursalId", sucursalId);
+  if (alcance === "todos") q.set("alcance", "todos");
+  const qs = q.toString();
+  const data = await parse<{ productos: Producto[] }>(await fetch(`/api/productos${qs ? `?${qs}` : ""}`));
   return data.productos;
 }
 
-export async function getInventario() {
-  return parse<InventarioPayload>(await fetch("/api/inventario"));
+export async function getInventario(options: { detalle?: boolean } = {}) {
+  return parse<InventarioPayload>(await fetch(options.detalle ? "/api/inventario?detalle=1" : "/api/inventario"));
 }
 
 export async function uploadInventario(file: File) {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const utf16 = decodeSpreadsheetBuffer(bytes);
-  if (utf16) {
-    const rows = keepConteoSpreadsheet(parseDelimitedText(utf16));
+  const name = file.name.trim().toLowerCase();
+  const isText = name.endsWith(".csv") || name.endsWith(".tsv") || name.endsWith(".txt");
+  const text = decodeSpreadsheetBuffer(bytes) ?? (isText ? new TextDecoder("utf-8").decode(bytes).replace(/^\uFEFF/, "") : null);
+  if (text) {
+    const rows = parseDelimitedText(text);
     return parse<InventarioPayload>(
       await fetch("/api/inventario", {
         method: "POST",
@@ -157,12 +164,34 @@ export async function weeklySessionFor(sucursalId: string, weekKey?: string) {
   return data.session;
 }
 
-export async function unlockWeek(sucursalId: string, weekKey: string, por: string) {
+export async function unlockWeek(
+  sucursalId: string,
+  weekKey: string,
+  opts: { email: string; por: string; startDate: string; days: number },
+) {
   const data = await parse<{ session: CountSession }>(
     await fetch("/api/admin/conteos/desbloquear", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sucursalId, weekKey, por }),
+      body: JSON.stringify({
+        sucursalId,
+        weekKey,
+        email: opts.email,
+        por: opts.por,
+        startDate: opts.startDate,
+        days: opts.days,
+      }),
+    }),
+  );
+  return data.session;
+}
+
+export async function relockWeek(sucursalId: string, weekKey: string, email: string) {
+  const data = await parse<{ session: CountSession }>(
+    await fetch("/api/admin/conteos/desbloquear", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sucursalId, weekKey, email, lock: true }),
     }),
   );
   return data.session;

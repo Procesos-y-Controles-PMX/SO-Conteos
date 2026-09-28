@@ -1,7 +1,8 @@
 -- Per-sucursal SAP stock from the national inventory file.
 -- Run in the Cotizador Supabase SQL editor (project with ctz_sucursales),
 -- not Equipo Móvil.
--- Línea L01–L12 (or blank) only. PK is (sucursal, sku).
+-- All lines are stored; the weekly count filters to L01–L12 (or blank) at read time.
+-- PK is (sucursal, sku).
 
 drop table if exists cnt_inventario_sku cascade;
 

@@ -1,4 +1,4 @@
-import { Check, Lock, X } from "lucide-react";
+import { Check, Lock, Minus, Unlock, X } from "lucide-react";
 import type { WeekState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { weekLabel, weekLabelParts } from "@/lib/week";
@@ -6,11 +6,15 @@ import { weekLabel, weekLabelParts } from "@/lib/week";
 function WeekMark({
   weekKey,
   state,
+  canManageUnlock,
   onUnlock,
+  onRelock,
 }: {
   weekKey: string;
   state: WeekState;
+  canManageUnlock?: boolean;
   onUnlock?: (weekKey: string) => void;
+  onRelock?: (weekKey: string) => void;
 }) {
   const label = weekLabel(weekKey);
   const base = "inline-flex h-5 w-5 items-center justify-center rounded-sm";
@@ -21,9 +25,16 @@ function WeekMark({
       </span>
     );
   }
+  if (state === "no_concluido") {
+    return (
+      <span className={cn(base, "text-brand")} title={`${label} no concluido`}>
+        <Minus className="h-3.5 w-3.5" strokeWidth={2.8} aria-label={`${label} no concluido`} />
+      </span>
+    );
+  }
   if (state === "bloqueada") {
-    const title = `${label} bloqueada sin envío${onUnlock ? " · toca para desbloquear" : ""}`;
-    if (!onUnlock) {
+    const title = `${label} bloqueada sin envío${canManageUnlock && onUnlock ? " · toca para desbloquear" : ""}`;
+    if (!canManageUnlock || !onUnlock) {
       return (
         <span className={cn(base, "text-brand")} title={title}>
           <Lock className="h-3 w-3" strokeWidth={2.6} aria-label={title} />
@@ -39,6 +50,27 @@ function WeekMark({
         onClick={() => onUnlock(weekKey)}
       >
         <Lock className="h-3 w-3" strokeWidth={2.6} />
+      </button>
+    );
+  }
+  if (state === "desbloqueada") {
+    const title = `${label} desbloqueada${canManageUnlock && onRelock ? " · toca para volver a bloquear" : ""}`;
+    if (!canManageUnlock || !onRelock) {
+      return (
+        <span className={cn(base, "text-emerald-600")} title={title}>
+          <Unlock className="h-3 w-3" strokeWidth={2.6} aria-label={title} />
+        </span>
+      );
+    }
+    return (
+      <button
+        type="button"
+        className={cn(base, "text-emerald-600 transition-colors hover:bg-[color-mix(in_srgb,var(--fg)_8%,transparent)]")}
+        title={title}
+        aria-label={title}
+        onClick={() => onRelock(weekKey)}
+      >
+        <Unlock className="h-3 w-3" strokeWidth={2.6} />
       </button>
     );
   }
@@ -62,12 +94,16 @@ function WeekHead({ weekKey }: { weekKey: string }) {
 export default function WeekHistory({
   weeks,
   stateByWeek,
+  canManageUnlock = false,
   onUnlock,
+  onRelock,
   compact = false,
 }: {
   weeks: string[];
   stateByWeek: Record<string, WeekState>;
+  canManageUnlock?: boolean;
   onUnlock?: (weekKey: string) => void;
+  onRelock?: (weekKey: string) => void;
   compact?: boolean;
 }) {
   if (weeks.length === 0) return null;
@@ -76,7 +112,14 @@ export default function WeekHistory({
     return (
       <div className="grid w-[7.25rem] grid-cols-4 justify-items-center" aria-label="Últimas 4 semanas">
         {weeks.map((key) => (
-          <WeekMark key={key} weekKey={key} state={stateByWeek[key] ?? "abierta"} onUnlock={onUnlock} />
+          <WeekMark
+            key={key}
+            weekKey={key}
+            state={stateByWeek[key] ?? "abierta"}
+            canManageUnlock={canManageUnlock}
+            onUnlock={onUnlock}
+            onRelock={onRelock}
+          />
         ))}
       </div>
     );
@@ -98,7 +141,13 @@ export default function WeekHistory({
         <tr>
           {weeks.map((key) => (
             <td key={key} className="px-0.5 pt-0.5 text-center">
-              <WeekMark weekKey={key} state={stateByWeek[key] ?? "abierta"} onUnlock={onUnlock} />
+              <WeekMark
+                weekKey={key}
+                state={stateByWeek[key] ?? "abierta"}
+                canManageUnlock={canManageUnlock}
+                onUnlock={onUnlock}
+                onRelock={onRelock}
+              />
             </td>
           ))}
         </tr>

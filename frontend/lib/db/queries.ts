@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CountKind, CountLine, CountSession, Producto } from "@/lib/types";
-import type { InventarioRow } from "@/lib/excel/parseInventario";
+import { isConteoLinea, type InventarioRow } from "@/lib/excel/parseInventario";
 import { mapInventarioMeta, mapLine, mapProducto, mapSession, type CntConteoRow, type CntLineaRow } from "@/lib/db/map";
 import { fetchSucursalById, fetchSucursales } from "@/lib/db/stores";
 import { evidenceRetentionDays, purgeExpiredEvidence, removeConteoEvidence } from "@/lib/evidence";
@@ -35,36 +35,47 @@ function mapStockRows(rows: StockRow[], nameById: Map<string, string>): Producto
   );
 }
 
-export async function fetchSapStock(supabase: SupabaseClient, sucursalId?: string): Promise<Producto[]> {
-  const fromAjustes = await fetchInventarioAjustes(supabase);
-  const sucursales = sucursalId ? [] : await fetchSucursales(supabase);
-  const nameById = new Map(sucursales.map((s) => [s.id, s.nombre]));
-
-  if (fromAjustes?.length) {
-    const rows = sucursalId ? fromAjustes.filter((r) => r.id_sucursal === sucursalId) : fromAjustes;
-    return mapStockRows(rows, nameById);
-  }
-
+async function fetchInventarioTabla(supabase: SupabaseClient, sucursalId?: string): Promise<StockRow[] | null> {
   const page = 1000;
   const rows: StockRow[] = [];
   for (let from = 0; ; from += page) {
-    let q = supabase.from("cnt_inventario_sku").select("*").order("sku");
+    let q = supabase.from("cnt_inventario_sku").select("*").order("id_sucursal").order("sku");
     if (sucursalId) q = q.eq("id_sucursal", sucursalId);
     const { data, error } = await q.range(from, from + page - 1);
     if (error) {
-      if (error.message.includes("id_sucursal")) return [];
+      if (error.message.includes("id_sucursal")) return null;
       throw error;
     }
     const batch = (data ?? []) as StockRow[];
     rows.push(...batch);
     if (batch.length < page) break;
   }
+  return rows;
+}
+
+export async function fetchSapStock(supabase: SupabaseClient, sucursalId?: string): Promise<Producto[]> {
+  const sucursales = sucursalId ? [] : await fetchSucursales(supabase);
+  const nameById = new Map(sucursales.map((s) => [s.id, s.nombre]));
+
+  const fromTabla = await fetchInventarioTabla(supabase, sucursalId);
+  if (fromTabla?.length) return mapStockRows(fromTabla, nameById);
+
+  const fromAjustes = await fetchInventarioAjustes(supabase);
+  if (!fromAjustes?.length) return [];
+  const rows = sucursalId ? fromAjustes.filter((r) => r.id_sucursal === sucursalId) : fromAjustes;
   return mapStockRows(rows, nameById);
 }
 
-/** Assortment for weekly/urgent counts: L1–L12 (+ blank) stock for this store. */
-export async function fetchProductos(supabase: SupabaseClient, sucursalId?: string): Promise<Producto[]> {
-  const rows = await fetchSapStock(supabase, sucursalId);
+/** "semanal" = L1–L12 (+ blank) only; "todos" = every line (urgentes). */
+export type AlcanceProductos = "semanal" | "todos";
+
+export async function fetchProductos(
+  supabase: SupabaseClient,
+  sucursalId?: string,
+  alcance: AlcanceProductos = "semanal",
+): Promise<Producto[]> {
+  const stock = await fetchSapStock(supabase, sucursalId);
+  const rows = alcance === "todos" ? stock : stock.filter((p) => isConteoLinea(p.linea ?? ""));
   if (sucursalId) return rows.sort((a, b) => a.sku.localeCompare(b.sku, "es"));
   const unique = new Map<string, Producto>();
   for (const row of rows) {
@@ -74,7 +85,7 @@ export async function fetchProductos(supabase: SupabaseClient, sucursalId?: stri
   return Array.from(unique.values()).sort((a, b) => a.sku.localeCompare(b.sku, "es"));
 }
 
-async function insertSessionLines(supabase: SupabaseClient, conteoId: string, productos: Producto[]) {
+export async function insertSessionLines(supabase: SupabaseClient, conteoId: string, productos: Producto[]) {
   const chunk = 400;
   for (let i = 0; i < productos.length; i += chunk) {
     const slice = productos.slice(i, i + chunk);
@@ -176,13 +187,13 @@ export async function fetchSession(
     await purgeExpiredEvidence(supabase, id);
   }
   let lines = await linesFor(supabase, id);
-  if (row.kind === "semanal" && row.status !== "enviado" && options.syncCatalog) {
+  if (row.kind === "semanal" && row.status !== "enviado" && row.status !== "no_concluido" && options.syncCatalog) {
     lines = await syncWeeklyLines(supabase, id, row.id_sucursal, lines);
   }
   // Backfill unit cost for MONTO even on already-captured / enviado lines.
   if (lines.some((line) => !(line.costo && line.costo > 0))) {
     try {
-      const productos = await fetchProductos(supabase, row.id_sucursal);
+      const productos = await fetchProductos(supabase, row.id_sucursal, "todos");
       const bySku = new Map(productos.map((p) => [p.sku.toUpperCase(), p.costo ?? 0]));
       lines = lines.map((line) => ({
         ...line,
@@ -231,18 +242,39 @@ export async function fetchSessions(
 
 export class SemanaBloqueadaError extends Error {}
 
+type UnlockOptions = {
+  unlockBy?: string;
+  /** Exclusive end of the unlock window (ISO). Required when unlocking. */
+  unlockUntil?: string;
+  /** Clear an active unlock (re-lock). */
+  lock?: boolean;
+};
+
 /**
  * Past weeks are locked: a store can only reopen a count that already exists.
- * `unlock` (admin) creates it if needed and marks it as unlocked.
+ * Lilian unlocks with a start date + duration; when the window ends it locks again.
  */
 export async function ensureWeekly(
   supabase: SupabaseClient,
   sucursalId: string,
   weekKey: string,
-  options: { unlockBy?: string } = {},
+  options: UnlockOptions = {},
 ): Promise<CountSession> {
-  const unlock = options.unlockBy !== undefined;
-  const unlockPatch = { desbloqueado_at: new Date().toISOString(), desbloqueado_por: options.unlockBy || null };
+  const unlocking = options.unlockBy !== undefined && !options.lock;
+  const locking = Boolean(options.lock);
+  const unlockPatch = unlocking
+    ? {
+        desbloqueado_at: new Date().toISOString(),
+        desbloqueado_por: options.unlockBy || null,
+        desbloqueado_hasta: options.unlockUntil || null,
+      }
+    : null;
+  const lockPatch = {
+    desbloqueado_at: null,
+    desbloqueado_por: null,
+    desbloqueado_hasta: null,
+  };
+
   const { data: existing } = await supabase
     .from("cnt_conteos")
     .select("*")
@@ -252,13 +284,17 @@ export async function ensureWeekly(
     .maybeSingle();
   if (existing) {
     const row = existing as CntConteoRow;
-    if (unlock && row.status !== "enviado") {
-      const { error } = await supabase.from("cnt_conteos").update(unlockPatch).eq("id", row.id);
+    if ((unlocking || locking) && row.status !== "enviado" && row.status !== "no_concluido") {
+      const { error } = await supabase
+        .from("cnt_conteos")
+        .update(locking ? lockPatch : unlockPatch!)
+        .eq("id", row.id);
       if (error) throw error;
     }
     return (await fetchSession(supabase, row.id, { syncCatalog: true }))!;
   }
-  if (!unlock && weekKey < weekKeyFromDate()) throw new SemanaBloqueadaError();
+  if (!unlocking && weekKey < weekKeyFromDate()) throw new SemanaBloqueadaError();
+  if (locking) throw new SemanaBloqueadaError();
 
   const { data: created, error } = await supabase
     .from("cnt_conteos")
@@ -268,7 +304,7 @@ export async function ensureWeekly(
       week_key: weekKey,
       titulo: `Conteo semanal · ${weekLabel(weekKey)}`,
       status: "pendiente",
-      ...(unlock ? unlockPatch : {}),
+      ...(unlockPatch ?? {}),
     })
     .select("*")
     .single();
@@ -308,21 +344,26 @@ export async function replaceInventario(
     costo: p.costo,
     linea: p.linea || null,
   }));
-  const { error: ajusteError } = await supabase.from("cnt_ajustes").upsert({
-    clave: INVENTARIO_KEY,
-    valor: payload,
-  });
-  if (ajusteError) throw ajusteError;
-
   const now = new Date().toISOString();
-  await supabase.from("cnt_inventario_sku").delete().neq("sku", "");
-  const chunk = 400;
-  for (let i = 0; i < payload.length; i += chunk) {
+  const { error: wipeError } = await supabase.from("cnt_inventario_sku").delete().neq("sku", "");
+  let tablaOk = !wipeError;
+  const chunk = 500;
+  for (let i = 0; tablaOk && i < payload.length; i += chunk) {
     const { error } = await supabase.from("cnt_inventario_sku").insert(
       payload.slice(i, i + chunk).map((p) => ({ ...p, updated_at: now })),
     );
-    if (error && (error.message.includes("id_sucursal") || error.code === "PGRST204")) break;
-    if (error) throw error;
+    if (error && (error.message.includes("id_sucursal") || error.code === "PGRST204")) tablaOk = false;
+    else if (error) throw error;
+  }
+
+  if (tablaOk) {
+    await supabase.from("cnt_ajustes").delete().eq("clave", INVENTARIO_KEY);
+  } else {
+    const { error: ajusteError } = await supabase.from("cnt_ajustes").upsert({
+      clave: INVENTARIO_KEY,
+      valor: payload,
+    });
+    if (ajusteError) throw ajusteError;
   }
   const { error: cargaError } = await supabase.from("cnt_inventario_carga").insert({ file_name: fileName });
   if (cargaError) throw cargaError;
