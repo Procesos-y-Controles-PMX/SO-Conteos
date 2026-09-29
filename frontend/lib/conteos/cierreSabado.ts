@@ -1,19 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CntConteoRow } from "@/lib/db/map";
 import { fetchSession } from "@/lib/db/queries";
-import { sessionDiffStats, sessionWasStarted } from "@/lib/types";
+import { sessionDiffStats, sessionWasStarted, unlockActivo } from "@/lib/types";
 import { weekDeadlinePassed } from "@/lib/week";
 
 export const COMENTARIO_NO_CONCLUIDO = "no concluido";
 
 /**
  * Closes started-but-unsent counts whose Saturday midnight CDMX deadline passed.
- * Does not touch counts that were never started.
+ * Does not touch counts that were never started or that have an open unlock window.
  */
 export async function cerrarConteosNoConcluidos(supabase: SupabaseClient, now = new Date()) {
   const { data, error } = await supabase
     .from("cnt_conteos")
-    .select("id, kind, week_key, status")
+    .select("id, kind, week_key, status, desbloqueado_at, desbloqueado_hasta")
     .in("status", ["pendiente", "en_progreso"]);
   if (error) throw error;
 
@@ -21,9 +21,14 @@ export async function cerrarConteosNoConcluidos(supabase: SupabaseClient, now = 
   let closed = 0;
   let skipped = 0;
 
-  for (const row of (data ?? []) as Array<Pick<CntConteoRow, "id" | "kind" | "week_key" | "status">>) {
+  type Row = Pick<CntConteoRow, "id" | "kind" | "week_key" | "status" | "desbloqueado_at" | "desbloqueado_hasta">;
+  for (const row of (data ?? []) as Row[]) {
     examined += 1;
-    if (!weekDeadlinePassed(row.week_key, now)) {
+    const unlockOpen = unlockActivo(
+      { desbloqueadoAt: row.desbloqueado_at ?? undefined, desbloqueadoHasta: row.desbloqueado_hasta ?? undefined },
+      now,
+    );
+    if (!weekDeadlinePassed(row.week_key, now) || unlockOpen) {
       skipped += 1;
       continue;
     }

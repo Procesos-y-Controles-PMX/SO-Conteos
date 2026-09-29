@@ -144,9 +144,9 @@ export default function NuevoUrgentePage() {
               }
               onChange={(opt) => setSucursalId(opt?.id ?? "")}
               onSearch={(query) => {
-                const q = query.trim().toLowerCase();
+                const q = fold(query);
                 return sucursales
-                  .filter((s) => !q || `${s.nombre} ${s.zona}`.toLowerCase().includes(q))
+                  .filter((s) => !q || fold(`${s.nombre} ${s.zona}`).includes(q))
                   .slice(0, 40)
                   .map((s) => ({ id: s.id, label: s.nombre, sublabel: s.zona }));
               }}
