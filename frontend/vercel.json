@@ -7,7 +7,7 @@
     },
     {
       "path": "/api/cron/cierre-conteos",
-      "schedule": "5 * * * *"
+      "schedule": "10 6 * * *"
     }
   ]
 }

@@ -10,7 +10,7 @@ function authorized(request: Request) {
   return request.headers.get("authorization") === `Bearer ${secret}`;
 }
 
-/** Hourly: close started counts past Saturday midnight CDMX as "no concluido". */
+/** Daily 00:10 CDMX (Hobby plan allows one run per day): close started counts past Saturday midnight as "no concluido". */
 export async function GET(request: Request) {
   if (!authorized(request)) return fail("No autorizado.", 401);
   const resolved = dbOrError();
