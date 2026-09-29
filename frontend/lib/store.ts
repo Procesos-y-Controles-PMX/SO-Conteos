@@ -1,3 +1,4 @@
+import { goToLogin } from "@/lib/auth";
 import { decodeSpreadsheetBuffer, parseDelimitedText } from "@/lib/excel/parseInventario";
 import { EVIDENCE_MAX_BYTES, isAllowedEvidenceMime, mimeFromFileName } from "@/lib/evidence";
 import type { SoAccount, SoAccountsSourceStatus } from "@/lib/so-account-types";
@@ -19,6 +20,10 @@ export type InventarioPayload = {
 };
 
 async function parse<T>(res: Response): Promise<T> {
+  if (res.status === 401) {
+    goToLogin();
+    throw new Error("Tu sesión expiró. Inicia sesión de nuevo.");
+  }
   let body: T & { ok?: boolean; message?: string };
   try {
     body = (await res.json()) as T & { ok?: boolean; message?: string };
@@ -45,12 +50,11 @@ export async function listAdminUsuarios() {
   return parse<{ sucursales: Sucursal[]; usuarios: CtzUsuario[] }>(await fetch("/api/admin/usuarios"));
 }
 
-export async function listSoAccounts(viewerEmail: string) {
-  const params = new URLSearchParams({ viewer: viewerEmail });
+export async function listSoAccounts() {
   return parse<{
     cuentas: SoAccount[];
     sources: Record<SoAccount["app"], SoAccountsSourceStatus>;
-  }>(await fetch(`/api/admin/cuentas?${params}`));
+  }>(await fetch("/api/admin/cuentas"));
 }
 
 export type UsuarioPayload = {
@@ -167,7 +171,7 @@ export async function weeklySessionFor(sucursalId: string, weekKey?: string) {
 export async function unlockWeek(
   sucursalId: string,
   weekKey: string,
-  opts: { email: string; por: string; startDate: string; days: number },
+  opts: { startDate: string; days: number },
 ) {
   const data = await parse<{ session: CountSession }>(
     await fetch("/api/admin/conteos/desbloquear", {
@@ -176,8 +180,6 @@ export async function unlockWeek(
       body: JSON.stringify({
         sucursalId,
         weekKey,
-        email: opts.email,
-        por: opts.por,
         startDate: opts.startDate,
         days: opts.days,
       }),
@@ -186,12 +188,12 @@ export async function unlockWeek(
   return data.session;
 }
 
-export async function relockWeek(sucursalId: string, weekKey: string, email: string) {
+export async function relockWeek(sucursalId: string, weekKey: string) {
   const data = await parse<{ session: CountSession }>(
     await fetch("/api/admin/conteos/desbloquear", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sucursalId, weekKey, email, lock: true }),
+      body: JSON.stringify({ sucursalId, weekKey, lock: true }),
     }),
   );
   return data.session;

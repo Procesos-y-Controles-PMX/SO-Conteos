@@ -1,14 +1,12 @@
-import { isMajorAdminEmail } from "@/lib/access";
 import { fail, ok } from "@/lib/api/http";
+import { requireSession } from "@/lib/api/session";
 import { fetchSoAccounts } from "@/lib/so-accounts";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  const viewer = new URL(request.url).searchParams.get("viewer");
-  if (!isMajorAdminEmail(viewer)) {
-    return fail("No autorizado.", 403);
-  }
+export async function GET() {
+  const auth = await requireSession("major");
+  if ("response" in auth) return auth.response;
 
   try {
     const result = await fetchSoAccounts();

@@ -1,4 +1,5 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
+import { requireSession } from "@/lib/api/session";
 import { deleteConteo } from "@/lib/db/queries";
 
 type Params = { params: Promise<{ id: string }> };
@@ -6,6 +7,8 @@ type Params = { params: Promise<{ id: string }> };
 export const dynamic = "force-dynamic";
 
 export async function DELETE(_request: Request, { params }: Params) {
+  const auth = await requireSession("admin");
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   const { id } = await params;

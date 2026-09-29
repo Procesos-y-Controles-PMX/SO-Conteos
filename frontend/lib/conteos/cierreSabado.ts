@@ -1,10 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CntConteoRow } from "@/lib/db/map";
 import { fetchSession } from "@/lib/db/queries";
-import { sessionDiffStats, sessionWasStarted, unlockActivo } from "@/lib/types";
+import { COMENTARIO_NO_CONCLUIDO, sessionDiffStats, sessionWasStarted, unlockActivo } from "@/lib/types";
 import { weekDeadlinePassed } from "@/lib/week";
-
-export const COMENTARIO_NO_CONCLUIDO = "no concluido";
 
 /**
  * Closes started-but-unsent counts whose Saturday midnight CDMX deadline passed.
@@ -44,7 +42,6 @@ export async function cerrarConteosNoConcluidos(supabase: SupabaseClient, now = 
       .update({
         status: "no_concluido",
         comentario: COMENTARIO_NO_CONCLUIDO,
-        captura_cerrada_at: session.capturaCerradaAt ?? closedAt,
         submitted_at: closedAt,
         dif_skus: stats.skuCount,
         dif_monto: stats.monto,

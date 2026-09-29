@@ -1,4 +1,5 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
+import { setSessionCookie } from "@/lib/api/session";
 import { mapCtzUser, type CtzUsuarioRow } from "@/lib/db/map";
 import { fetchSucursalById } from "@/lib/db/stores";
 import { clientMetaFromRequest, logSoAccess, logSoFailedAccess } from "@/lib/so-access-log";
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
       }
       const user = mapCtzUser(row);
       logLogin(request, user);
-      return ok({ user });
+      return await setSessionCookie(ok({ user }), user);
     }
 
     const sucursalId = body.sucursalId ?? "";
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
       zona: sucursal.zona,
     });
     logLogin(request, user, sucursal.gerenteEmail);
-    return ok({ user });
+    return await setSessionCookie(ok({ user }), user);
   } catch (err) {
     console.error(err);
     return fail("Error al iniciar sesión.", 500);

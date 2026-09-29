@@ -1,4 +1,5 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
+import { requireSession } from "@/lib/api/session";
 import { fetchSessions, fetchSucursales } from "@/lib/db/queries";
 import { sessionSemaforo, type CountSession, type SemaforoResumen, type Sucursal, type ZonaSemaforo } from "@/lib/types";
 import { weekKeyFromDate, nearbyWeekKeys } from "@/lib/week";
@@ -61,6 +62,8 @@ function zonasFor(sucursales: Sucursal[], sessions: CountSession[]): ZonaSemafor
 }
 
 export async function GET(request: Request) {
+  const auth = await requireSession("admin");
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   const url = new URL(request.url);

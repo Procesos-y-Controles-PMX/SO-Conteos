@@ -1,4 +1,5 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
+import { requireSession } from "@/lib/api/session";
 import { fetchSucursales } from "@/lib/db/queries";
 import type { CtzUsuario, Role } from "@/lib/types";
 
@@ -41,6 +42,8 @@ async function countActiveAdmins(
 }
 
 export async function GET() {
+  const auth = await requireSession("admin");
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   try {
@@ -56,6 +59,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireSession("admin");
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
 
@@ -97,6 +102,8 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  const auth = await requireSession("admin");
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
 
@@ -155,6 +162,8 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const auth = await requireSession("admin");
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
 

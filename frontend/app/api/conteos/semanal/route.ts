@@ -1,14 +1,18 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
 import { MSG_BLOQUEADO } from "@/lib/api/conteoGuard";
+import { canAccessSucursal, requireSession } from "@/lib/api/session";
 import { SemanaBloqueadaError, ensureWeekly } from "@/lib/db/queries";
 import { weekKeyFromDate } from "@/lib/week";
 
 export async function POST(request: Request) {
+  const auth = await requireSession();
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   try {
     const body = (await request.json()) as { sucursalId?: string; weekKey?: string };
     if (!body.sucursalId) return fail("Sucursal requerida.");
+    if (!canAccessSucursal(auth.user, body.sucursalId)) return fail("No autorizado.", 403);
     const session = await ensureWeekly(
       resolved.supabase,
       body.sucursalId,

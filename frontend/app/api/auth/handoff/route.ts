@@ -1,5 +1,6 @@
 import { jwtVerify } from "jose";
 import { dbOrError, fail, ok } from "@/lib/api/http";
+import { setSessionCookie } from "@/lib/api/session";
 import { mapCtzUser, type CtzUsuarioRow } from "@/lib/db/map";
 import { fetchSucursalByGerenteEmail } from "@/lib/db/stores";
 import { clientMetaFromRequest, logSoAccess } from "@/lib/so-access-log";
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
     if (raw.rol === "admin") {
       const user = mapCtzUser(raw);
       logHandoff(user);
-      return ok({ user });
+      return await setSessionCookie(ok({ user }), user);
     }
 
     const picked = session?.sucursal?.id
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
       zona: picked.zona,
     });
     logHandoff(tienda);
-    return ok({ user: tienda });
+    return await setSessionCookie(ok({ user: tienda }), tienda);
   } catch {
     return fail("Token inválido o expirado. Inicia sesión de nuevo.", 401);
   }

@@ -1,15 +1,18 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
 import { conteoParaEditar, MSG_CAPTURA_CERRADA } from "@/lib/api/conteoGuard";
+import { requireSession } from "@/lib/api/session";
 import type { CountLine } from "@/lib/types";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, { params }: Params) {
+  const auth = await requireSession();
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   const { id } = await params;
   try {
-    const guard = await conteoParaEditar(resolved.supabase, id);
+    const guard = await conteoParaEditar(resolved.supabase, id, auth.user);
     if ("response" in guard) return guard.response;
 
     const body = (await request.json()) as { sku?: string; patch?: Partial<CountLine> };

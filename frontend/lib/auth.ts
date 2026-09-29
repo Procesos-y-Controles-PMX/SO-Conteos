@@ -22,6 +22,9 @@ export function getCurrentUser(): SessionUser | null {
 
 export function logout() {
   store()?.removeItem(SESSION_KEY);
+  if (typeof window !== "undefined") {
+    void fetch("/api/auth/logout", { method: "POST", keepalive: true }).catch(() => undefined);
+  }
 }
 
 export function portalLoginUrl(): string | null {

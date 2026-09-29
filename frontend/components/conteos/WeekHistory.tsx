@@ -26,10 +26,24 @@ function WeekMark({
     );
   }
   if (state === "no_concluido") {
+    const title = `${label} no concluido${canManageUnlock && onUnlock ? " · toca para reabrir" : ""}`;
+    if (!canManageUnlock || !onUnlock) {
+      return (
+        <span className={cn(base, "text-brand")} title={title}>
+          <Minus className="h-3.5 w-3.5" strokeWidth={2.8} aria-label={title} />
+        </span>
+      );
+    }
     return (
-      <span className={cn(base, "text-brand")} title={`${label} no concluido`}>
-        <Minus className="h-3.5 w-3.5" strokeWidth={2.8} aria-label={`${label} no concluido`} />
-      </span>
+      <button
+        type="button"
+        className={cn(base, "text-brand transition-colors hover:bg-[color-mix(in_srgb,var(--fg)_8%,transparent)]")}
+        title={title}
+        aria-label={title}
+        onClick={() => onUnlock(weekKey)}
+      >
+        <Minus className="h-3.5 w-3.5" strokeWidth={2.8} />
+      </button>
     );
   }
   if (state === "bloqueada") {

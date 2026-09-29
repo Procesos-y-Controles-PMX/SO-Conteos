@@ -1,9 +1,12 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
+import { requireSession } from "@/lib/api/session";
 import { fetchProductos, fetchSession, fetchSucursalById, insertSessionLines } from "@/lib/db/queries";
 import { URGENTE_MAX_SKUS } from "@/lib/types";
 import { weekKeyFromDate } from "@/lib/week";
 
 export async function POST(request: Request) {
+  const auth = await requireSession("admin");
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   const { supabase } = resolved;

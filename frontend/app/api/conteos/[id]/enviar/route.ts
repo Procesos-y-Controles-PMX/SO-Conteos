@@ -1,16 +1,19 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
 import { conteoParaEditar } from "@/lib/api/conteoGuard";
+import { requireSession } from "@/lib/api/session";
 import { fetchSession } from "@/lib/db/queries";
 import { sessionDiffStats } from "@/lib/types";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, { params }: Params) {
+  const auth = await requireSession();
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   const { id } = await params;
   try {
-    const guard = await conteoParaEditar(resolved.supabase, id);
+    const guard = await conteoParaEditar(resolved.supabase, id, auth.user);
     if ("response" in guard) return guard.response;
 
     const body = (await request.json()) as {

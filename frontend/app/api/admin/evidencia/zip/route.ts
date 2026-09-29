@@ -1,4 +1,5 @@
 import { dbOrError, fail, ok } from "@/lib/api/http";
+import { requireSession } from "@/lib/api/session";
 import type { CntConteoRow } from "@/lib/db/map";
 import { fetchSucursales } from "@/lib/db/stores";
 import { EVIDENCE_BUCKET, safeEvidenceSku } from "@/lib/evidence";
@@ -34,6 +35,8 @@ function extOf(path: string) {
  * downloads and zips them, so large archives never pass through the function.
  */
 export async function POST(request: Request) {
+  const auth = await requireSession("admin");
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   try {

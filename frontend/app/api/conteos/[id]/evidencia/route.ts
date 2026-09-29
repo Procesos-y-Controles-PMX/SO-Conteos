@@ -10,7 +10,8 @@ import {
   mimeFromFileName,
   removeEvidenceFiles,
 } from "@/lib/evidence";
-import { conteoParaEditar } from "@/lib/api/conteoGuard";
+import { conteoParaEditar, conteoVisible } from "@/lib/api/conteoGuard";
+import { requireSession } from "@/lib/api/session";
 import type { EvidenceKind } from "@/lib/types";
 
 type Params = { params: Promise<{ id: string }> };
@@ -87,6 +88,8 @@ function clientPayload(kind: EvidenceKind, path: string, fileName: string, mime:
 }
 
 export async function GET(request: Request, { params }: Params) {
+  const auth = await requireSession();
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   const { id } = await params;
@@ -95,6 +98,8 @@ export async function GET(request: Request, { params }: Params) {
   const kind = normalizeKind(url.searchParams.get("kind"));
   if (!sku) return fail("SKU requerido.");
   try {
+    const visible = await conteoVisible(resolved.supabase, id, auth.user);
+    if ("response" in visible) return visible.response;
     const col = pathColumn(kind);
     const { data, error } = await resolved.supabase
       .from("cnt_conteo_lineas")
@@ -117,11 +122,13 @@ export async function GET(request: Request, { params }: Params) {
 }
 
 export async function POST(request: Request, { params }: Params) {
+  const auth = await requireSession();
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   const { id } = await params;
   try {
-    const guard = await conteoParaEditar(resolved.supabase, id, { capturaAbierta: true });
+    const guard = await conteoParaEditar(resolved.supabase, id, auth.user, { capturaAbierta: true });
     if ("response" in guard) return guard.response;
 
     const body = (await request.json()) as {
@@ -165,11 +172,13 @@ export async function POST(request: Request, { params }: Params) {
 }
 
 export async function PUT(request: Request, { params }: Params) {
+  const auth = await requireSession();
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   const { id } = await params;
   try {
-    const guard = await conteoParaEditar(resolved.supabase, id, { capturaAbierta: true });
+    const guard = await conteoParaEditar(resolved.supabase, id, auth.user, { capturaAbierta: true });
     if ("response" in guard) return guard.response;
 
     const body = (await request.json()) as {

@@ -1,4 +1,6 @@
+import { isConteosAdmin } from "@/lib/access";
 import { dbOrError, fail, ok } from "@/lib/api/http";
+import { requireSession } from "@/lib/api/session";
 import { fetchInventarioMeta, fetchSapStock, fetchSucursales, replaceInventario } from "@/lib/db/queries";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decodeSpreadsheetBuffer, isConteoLinea, parseDelimitedText, parseCsvText, resolveInventarioRows } from "@/lib/excel/parseInventario";
@@ -64,12 +66,15 @@ async function ingest(resolved: { supabase: import("@supabase/supabase-js").Supa
 }
 
 export async function GET(request: Request) {
+  const auth = await requireSession();
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   try {
     const detalle = new URL(request.url).searchParams.get("detalle") === "1";
     const meta = await fetchInventarioMeta(resolved.supabase);
     if (!detalle) return ok(meta);
+    if (!isConteosAdmin(auth.user.rol)) return fail("No autorizado.", 403);
     return ok({ ...meta, ...(await inventarioCounts(resolved.supabase, true)) });
   } catch (err) {
     console.error(err);
@@ -78,6 +83,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireSession("admin");
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   try {
@@ -102,6 +109,8 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const auth = await requireSession("admin");
+  if ("response" in auth) return auth.response;
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   try {

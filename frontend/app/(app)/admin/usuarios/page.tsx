@@ -167,11 +167,11 @@ export default function UsuariosPage() {
   }, [user]);
 
   useEffect(() => {
-    if (!showCreated || !user?.email) return;
-    void listSoAccounts(user.email)
+    if (!showCreated) return;
+    void listSoAccounts()
       .then((data) => setCuentas(data.cuentas ?? []))
       .catch((err: Error) => toast.error(err.message));
-  }, [showCreated, user?.email]);
+  }, [showCreated]);
 
   const createdByEmail = useMemo(() => {
     const map = new Map<string, string>();

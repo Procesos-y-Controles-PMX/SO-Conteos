@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { CountKind, CountLine, CountSession, Producto } from "@/lib/types";
+import { COMENTARIO_NO_CONCLUIDO, type CountKind, type CountLine, type CountSession, type Producto } from "@/lib/types";
 import { isConteoLinea, type InventarioRow } from "@/lib/excel/parseInventario";
 import { mapInventarioMeta, mapLine, mapProducto, mapSession, type CntConteoRow, type CntLineaRow } from "@/lib/db/map";
 import { fetchSucursalById, fetchSucursales } from "@/lib/db/stores";
@@ -253,6 +253,7 @@ type UnlockOptions = {
 /**
  * Past weeks are locked: a store can only reopen a count that already exists.
  * Lilian unlocks with a start date + duration; when the window ends it locks again.
+ * Unlocking a no-concluido count reopens it with what the store already captured.
  */
 export async function ensureWeekly(
   supabase: SupabaseClient,
@@ -284,7 +285,19 @@ export async function ensureWeekly(
     .maybeSingle();
   if (existing) {
     const row = existing as CntConteoRow;
-    if ((unlocking || locking) && row.status !== "enviado" && row.status !== "no_concluido") {
+    if (unlocking && row.status === "no_concluido") {
+      const { error } = await supabase
+        .from("cnt_conteos")
+        .update({
+          ...unlockPatch!,
+          status: "en_progreso",
+          submitted_at: null,
+          comentario: row.comentario === COMENTARIO_NO_CONCLUIDO ? null : row.comentario,
+        })
+        .eq("id", row.id)
+        .eq("status", "no_concluido");
+      if (error) throw error;
+    } else if ((unlocking || locking) && row.status !== "enviado" && row.status !== "no_concluido") {
       const { error } = await supabase
         .from("cnt_conteos")
         .update(locking ? lockPatch : unlockPatch!)

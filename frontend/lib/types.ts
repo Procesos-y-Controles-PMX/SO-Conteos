@@ -6,6 +6,8 @@ export type CountKind = "semanal" | "urgente";
 
 export type CountStatus = "pendiente" | "en_progreso" | "enviado" | "no_concluido";
 
+export const COMENTARIO_NO_CONCLUIDO = "no concluido";
+
 export type Semaforo = "verde" | "rojo" | "ambar";
 
 export type SemaforoResumen = {

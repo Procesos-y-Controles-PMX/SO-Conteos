@@ -148,12 +148,10 @@ export default function AdminSemaforoPage() {
   }
 
   async function confirmUnlock() {
-    if (!unlocking || !user?.email) return;
+    if (!unlocking) return;
     setUnlockPending(true);
     try {
       await unlockWeek(unlocking.sucursal.id, unlocking.weekKey, {
-        email: user.email,
-        por: user.nombre || user.email,
         startDate: unlockStart,
         days: unlockDays,
       });
@@ -170,10 +168,10 @@ export default function AdminSemaforoPage() {
   }
 
   async function confirmRelock() {
-    if (!relocking || !user?.email) return;
+    if (!relocking) return;
     setRelockPending(true);
     try {
-      await relockWeek(relocking.sucursal.id, relocking.weekKey, user.email);
+      await relockWeek(relocking.sucursal.id, relocking.weekKey);
       toast.success(`${relocking.sucursal.nombre}: ${weekLabel(relocking.weekKey)} vuelve a estar bloqueada.`);
       setRelocking(null);
       await refresh();
@@ -205,6 +203,15 @@ export default function AdminSemaforoPage() {
   }
 
   const viewing = zonas.length > 0;
+  const reopening =
+    unlocking &&
+    history.some(
+      (s) =>
+        s.sucursalId === unlocking.sucursal.id &&
+        s.kind === "semanal" &&
+        s.weekKey === unlocking.weekKey &&
+        s.status === "no_concluido",
+    );
 
   return (
     <div>
@@ -345,12 +352,14 @@ export default function AdminSemaforoPage() {
 
       <ConfirmDialog
         open={Boolean(unlocking)}
-        title="Desbloquear semana"
+        title={reopening ? "Reabrir conteo" : "Desbloquear semana"}
         body={
           unlocking ? (
             <span className="block space-y-3">
               <span className="block">
-                {unlocking.sucursal.nombre} podrá capturar el conteo de {weekLabel(unlocking.weekKey)}.
+                {reopening
+                  ? `El conteo de ${weekLabel(unlocking.weekKey)} de ${unlocking.sucursal.nombre} quedó como no concluido. Se reabre con lo que ya capturó para que lo termine y lo envíe; si vence el plazo sin enviarlo, se vuelve a cerrar como no concluido.`
+                  : `${unlocking.sucursal.nombre} podrá capturar el conteo de ${weekLabel(unlocking.weekKey)}.`}
               </span>
               <label className="block">
                 <span className="field-label mb-1.5 block">Fecha inicial</span>
@@ -377,7 +386,7 @@ export default function AdminSemaforoPage() {
             ""
           )
         }
-        confirmLabel="Desbloquear"
+        confirmLabel={reopening ? "Reabrir" : "Desbloquear"}
         cancelLabel="Cancelar"
         pending={unlockPending}
         onCancel={() => setUnlocking(null)}

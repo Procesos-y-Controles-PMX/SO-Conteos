@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
+import { requireSession } from "@/lib/api/session";
 import { fetchSoAccessLogs } from "@/lib/so-access-log";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  const auth = await requireSession("major");
+  if ("response" in auth) return auth.response;
   try {
     const { searchParams } = new URL(request.url);
     const daysRaw = parseInt(searchParams.get("days") || "14", 10);
