@@ -79,6 +79,7 @@ const ALIASES = {
   villahermosa: "villa hermosa",
   valles: "ciudad valles",
   "cancun operador lo": "cancun",
+  mexicali: "americas",
 };
 function sapPlantName(raw) {
   return raw.replace(SAP_PREFIX, "").replace(/\s+/g, " ").trim();
