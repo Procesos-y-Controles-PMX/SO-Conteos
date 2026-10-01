@@ -21,6 +21,12 @@ async function maybeRows<T>(
   return (data ?? []) as T[];
 }
 
+/** Closed for inventory counts but still active in Cotizador (Cd. Guzmán, Morelos). */
+const FUERA_DE_CONTEOS = new Set([
+  "76a63958-8df4-4942-b66a-6857941e49cd",
+  "827c98f9-7895-4c68-93c0-bbdcc0c1ab6f",
+]);
+
 type TiendaRow = {
   sucursal: string | null;
   correo: string | null;
@@ -47,7 +53,7 @@ export async function fetchSucursales(supabase: SupabaseClient, withGerente = fa
     .order("region")
     .order("nombre");
   if (error) throw error;
-  const rows = (data ?? []) as CtzSucursalRow[];
+  const rows = ((data ?? []) as CtzSucursalRow[]).filter((row) => !FUERA_DE_CONTEOS.has(String(row.id)));
 
   const [tiendas, crStores, users] = await Promise.all([
     maybeRows<TiendaRow>(supabase, "tiendas", "sucursal, correo, gerente_tienda, centro"),
