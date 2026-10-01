@@ -31,7 +31,7 @@ export function weekKeyFromDate(date = new Date()): string {
   const day = utc.getUTCDay() || 7;
   utc.setUTCDate(utc.getUTCDate() + 4 - day);
   const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
-  const week = Math.ceil(((utc.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  const week = Math.floor((utc.getTime() - yearStart.getTime()) / 86400000 / 7) + 1;
   return `${utc.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
@@ -67,7 +67,9 @@ export function shiftWeekKey(weekKey: string, delta: number): string {
   const [yearStr, weekStr] = weekKey.split("-W");
   const year = Number(yearStr);
   const week = Number(weekStr) + delta;
-  return weekKeyFromDate(mondayUtc(year, week));
+  const monday = mondayUtc(year, week);
+  monday.setUTCHours(12);
+  return weekKeyFromDate(monday);
 }
 
 export function nearbyWeekKeys(around = weekKeyFromDate(), count = 6): string[] {
