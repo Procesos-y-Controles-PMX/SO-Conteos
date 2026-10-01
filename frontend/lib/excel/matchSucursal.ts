@@ -25,6 +25,7 @@ const ALIASES: Record<string, string> = {
   valles: "ciudad valles",
   "cancun operador lo": "cancun",
   mexicali: "americas",
+  "chiapas sur": "comitan",
 };
 
 export function sapPlantName(raw: string): string {
