@@ -7,7 +7,15 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageHeader from "@/components/ui/PageHeader";
 import SelectDropdown from "@/components/ui/SelectDropdown";
 import { listSucursales, sessionsForWeek, deleteConteo } from "@/lib/store";
-import { lineDiff, lineMonto, sessionDiffStats, type CountLine, type CountSession, type Sucursal } from "@/lib/types";
+import {
+  evidenceFiles,
+  lineDiff,
+  lineMonto,
+  sessionDiffStats,
+  type CountLine,
+  type CountSession,
+  type Sucursal,
+} from "@/lib/types";
 import { cn, downloadTextFile, formatMoney, formatNumber } from "@/lib/utils";
 import { nearbyWeekKeys, weekLabel } from "@/lib/week";
 import { LineEvidence } from "@/components/conteos/EvidencePreview";
@@ -34,7 +42,7 @@ function linesForTable(lines: CountLine[], skuQuery: string, sort: DiffSort) {
 }
 
 function hasEvidence(session: CountSession) {
-  return session.lines.some((line) => line.evidenciaPath || line.evidenciaEntregarPath || line.evidenciaFacturarPath);
+  return session.lines.some((line) => evidenceFiles(line).length > 0);
 }
 
 export default function DescargasPage() {
@@ -75,7 +83,7 @@ export default function DescargasPage() {
     return true;
   });
 
-  function download() {
+  function download(sessionsToExport: CountSession[], fileName: string) {
     const header = [
       "semana",
       "tipo",
@@ -91,12 +99,13 @@ export default function DescargasPage() {
       "inv_teorico",
       "por_entrega",
       "por_facturar",
+      "danado",
       "dif",
       "monto",
       "comentarios",
     ];
     const lines = [header.join(",")];
-    for (const session of rows) {
+    for (const session of sessionsToExport) {
       const suc = sucursales.find((s) => s.id === session.sucursalId);
       for (const line of session.lines) {
         const diff = lineDiff(line);
@@ -117,6 +126,7 @@ export default function DescargasPage() {
             line.teorico,
             line.pendienteEntregar ?? "",
             line.pendienteFacturar ?? "",
+            line.danado ?? "",
             diff ?? "",
             monto ?? "",
             `"${(line.comentario ?? "").replaceAll('"', '""')}"`,
@@ -124,7 +134,16 @@ export default function DescargasPage() {
         );
       }
     }
-    downloadTextFile(`conteos-${weekLabel(week).replaceAll(" ", "-")}.csv`, lines.join("\n"));
+    downloadTextFile(fileName, lines.join("\n"));
+  }
+
+  /** One count per file, so a single urgente or week can be pulled on its own. */
+  function downloadOne(session: CountSession) {
+    const suc = sucursales.find((s) => s.id === session.sucursalId);
+    const label = session.kind === "semanal" ? `semanal-${weekLabel(session.weekKey)}` : session.titulo;
+    const day = session.createdAt.slice(0, 10);
+    const name = `conteo-${suc?.nombre ?? "sucursal"}-${label}-${day}`.replace(/[^\p{L}\p{N}-]+/gu, "-");
+    download([session], `${name}.csv`);
   }
 
   return (
@@ -139,8 +158,13 @@ export default function DescargasPage() {
               ids={rows.filter(hasEvidence).map((s) => s.id)}
               fileName={`evidencias-${weekLabel(week).replaceAll(" ", "-")}`}
             />
-            <button type="button" className="btn-primary" onClick={download} disabled={rows.length === 0}>
-              Descargar CSV
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => download(rows, `conteos-${weekLabel(week).replaceAll(" ", "-")}.csv`)}
+              disabled={rows.length === 0}
+            >
+              Descargar todo (CSV)
             </button>
           </div>
         }
@@ -225,21 +249,36 @@ export default function DescargasPage() {
                           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </button>
                       </td>
-                      <td className="px-4 py-3 capitalize">{session.kind}</td>
+                      <td className="px-4 py-3">
+                        <span className="capitalize">{session.kind}</span>
+                        <span className="block text-[11px] text-fg-faint">
+                          {session.kind === "urgente" ? `${session.titulo} · ` : ""}
+                          {new Date(session.createdAt).toLocaleDateString("es-MX")}
+                        </span>
+                      </td>
                       <td className="px-4 py-3">{suc?.nombre}</td>
                       <td className="px-4 py-3">{session.status.replace("_", " ")}</td>
                       <td className="px-4 py-3">{session.counterName ?? "—"}</td>
                       <td className="px-4 py-3 tabular-nums">{session.lines.length}</td>
                       <td className="px-4 py-3 tabular-nums">{formatNumber(diffs.skuCount, 0)}</td>
                       <td className="px-4 py-3 tabular-nums">{formatMoney(diffs.monto)}</td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          className="btn-danger min-h-8 px-2 py-1 text-xs"
-                          onClick={() => setPendingId(session.id)}
-                        >
-                          Borrar
-                        </button>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            className="btn-secondary min-h-8 px-2 py-1 text-xs"
+                            onClick={() => downloadOne(session)}
+                          >
+                            CSV
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-danger min-h-8 px-2 py-1 text-xs"
+                            onClick={() => setPendingId(session.id)}
+                          >
+                            Borrar
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     {open ? (
@@ -278,6 +317,7 @@ export default function DescargasPage() {
                                   <th className="px-2 py-2 text-right">Inv. teórico</th>
                                   <th className="px-2 py-2 text-right">Por entrega</th>
                                   <th className="px-2 py-2 text-right">Por facturar</th>
+                                  <th className="px-2 py-2 text-right">Dañado</th>
                                   <th className="px-2 py-2 text-right">Dif.</th>
                                   <th className="px-2 py-2 text-right">Monto</th>
                                   <th className="px-2 py-2 text-center">Evidencia</th>
@@ -301,6 +341,7 @@ export default function DescargasPage() {
                                       <td className="px-2 py-2 text-right tabular-nums">
                                         {qtyCell(line.pendienteFacturar)}
                                       </td>
+                                      <td className="px-2 py-2 text-right tabular-nums">{qtyCell(line.danado)}</td>
                                       <td
                                         className={cn(
                                           "px-2 py-2 text-right font-semibold tabular-nums",

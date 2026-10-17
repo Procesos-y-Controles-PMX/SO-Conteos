@@ -5,25 +5,30 @@ import { createPortal } from "react-dom";
 import { ImageIcon, Video } from "lucide-react";
 import { isImageMime } from "@/lib/evidence";
 import { evidenceViewUrl } from "@/lib/store";
-import type { CountLine, CountSession, EvidenceKind } from "@/lib/types";
+import { evidenceFiles, type CountLine, type CountSession, type EvidenceKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+export const EVIDENCE_LABEL: Record<EvidenceKind, string> = {
+  general: "Foto",
+  entregar: "Entregar",
+  facturar: "Facturar",
+  danado: "Dañado",
+};
 
 export default function EvidencePreview({
   sessionId,
-  sku,
-  kind = "general",
+  path,
   mime,
   name,
   label,
 }: {
   sessionId: string;
-  sku: string;
-  kind?: EvidenceKind;
+  path: string;
   mime?: string;
   name?: string;
   label?: string;
 }) {
-  const href = evidenceViewUrl(sessionId, sku, kind);
+  const href = evidenceViewUrl(sessionId, path);
   const image = isImageMime(mime);
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -96,39 +101,19 @@ export function LineEvidence({
   line: CountLine;
   className?: string;
 }) {
-  type Slot = { kind: EvidenceKind; path?: string; mime?: string; name?: string; label: string };
-  const all: Slot[] = [
-    { kind: "general", path: line.evidenciaPath, mime: line.evidenciaMime, name: line.evidencia, label: "Foto" },
-    {
-      kind: "entregar",
-      path: line.evidenciaEntregarPath,
-      mime: line.evidenciaEntregarMime,
-      name: line.evidenciaEntregar,
-      label: "Entregar",
-    },
-    {
-      kind: "facturar",
-      path: line.evidenciaFacturarPath,
-      mime: line.evidenciaFacturarMime,
-      name: line.evidenciaFacturar,
-      label: "Facturar",
-    },
-  ];
-  const slots = all.filter((slot) => Boolean(slot.path));
-
-  if (slots.length === 0) return null;
+  const files = evidenceFiles(line);
+  if (files.length === 0) return null;
 
   return (
     <div className={cn("flex flex-wrap gap-1.5", className)}>
-      {slots.map((slot) => (
+      {files.map((file) => (
         <EvidencePreview
-          key={slot.kind}
+          key={file.path}
           sessionId={session.id}
-          sku={line.sku}
-          kind={slot.kind}
-          mime={slot.mime}
-          name={slot.name}
-          label={slot.label}
+          path={file.path}
+          mime={file.mime}
+          name={file.nombre}
+          label={EVIDENCE_LABEL[file.kind]}
         />
       ))}
     </div>

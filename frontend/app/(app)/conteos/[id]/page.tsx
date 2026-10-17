@@ -12,7 +12,15 @@ import SkuStepper from "@/components/conteos/SkuStepper";
 import PageHeader from "@/components/ui/PageHeader";
 import { isConteosAdmin } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
-import { deleteConteo, getSession, patchLine, patchSession, submitSession, uploadEvidence } from "@/lib/store";
+import {
+  deleteConteo,
+  getSession,
+  patchLine,
+  patchSession,
+  removeEvidence,
+  submitSession,
+  uploadEvidence,
+} from "@/lib/store";
 import { setCountInProgress } from "@/lib/conteos/countLock";
 import { scopeWeeklySession } from "@/lib/catalog/polvos";
 import {
@@ -44,6 +52,8 @@ const CLOSE_WARNING = (
     <span className="mt-2 block">Después verás las diferencias contra SAP y solo podrás escribir comentarios.</span>
   </>
 );
+
+const MSG_NO_ENCONTRADO = "Conteo no encontrado.";
 
 function saveErrorMessage(err: unknown) {
   const msg = err instanceof Error ? err.message : "";
@@ -100,10 +110,21 @@ export default function CountSessionPage() {
       if (now - lastToastAt.current > 4000) {
         lastToastAt.current = now;
         const err = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
-        toast.error(saveErrorMessage(err.reason));
+        reportError(err.reason);
       }
     }
   }, []);
+
+  /** A 404 mid-capture means an admin deleted the count: show that instead of a toast loop. */
+  function reportError(err: unknown) {
+    if (err instanceof Error && err.message === MSG_NO_ENCONTRADO) {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+      pendingRef.current = {};
+      setMissing(true);
+      return;
+    }
+    toast.error(saveErrorMessage(err));
+  }
 
   function queueSave(sku: string, patch: Partial<CountLine>) {
     pendingRef.current[sku] = { ...pendingRef.current[sku], ...patch };
@@ -138,7 +159,19 @@ export default function CountSessionPage() {
     return () => setCountInProgress(false);
   }, [countRunning]);
 
-  if (missing) return <p className="text-sm text-fg-subtle">No se encontró este conteo.</p>;
+  if (missing) {
+    return (
+      <div className="neu-raised mx-auto max-w-lg rounded-lg p-6 text-center">
+        <h2 className="font-display text-2xl font-semibold text-fg">Conteo no encontrado</h2>
+        <p className="mt-2 text-sm text-fg-subtle">
+          Este conteo ya no existe; es probable que un administrador lo haya borrado. Lo capturado aquí no se guardó.
+        </p>
+        <button type="button" className="btn-secondary mt-4 w-full" onClick={() => router.push("/conteos")}>
+          Volver a conteos
+        </button>
+      </div>
+    );
+  }
   if (!session) return <p className="text-sm text-fg-subtle">Cargando…</p>;
 
   if (user?.rol === "tienda" && user.sucursalId !== session.sucursalId) {
@@ -169,12 +202,17 @@ export default function CountSessionPage() {
       setConfirmStart(true);
       return;
     }
-    void applyIdentity(payload).catch((err: Error) => toast.error(saveErrorMessage(err)));
+    void applyIdentity(payload).catch(reportError);
   }
 
   function handlePatch(sku: string, patch: Partial<CountLine>) {
     if (locked) return;
-    if (qtyLocked && (patch.fisico !== undefined || patch.pendienteEntregar !== undefined || patch.pendienteFacturar !== undefined)) {
+    const touchesQty =
+      patch.fisico !== undefined ||
+      patch.pendienteEntregar !== undefined ||
+      patch.pendienteFacturar !== undefined ||
+      patch.danado !== undefined;
+    if (qtyLocked && touchesQty) {
       return;
     }
     setSession((prev) => {
@@ -188,17 +226,38 @@ export default function CountSessionPage() {
     queueSave(sku, patch);
   }
 
-  async function handleEvidence(sku: string, file: File, kind: EvidenceKind = "general") {
-    if (locked || qtyLocked) return;
-    const saved = await uploadEvidence(current.id, sku, file, kind);
+  function patchLocalLine(sku: string, patch: (line: CountLine) => Partial<CountLine>) {
     setSession((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
         status: prev.status === "pendiente" ? "en_progreso" : prev.status,
-        lines: prev.lines.map((line) => (line.sku === sku ? { ...line, ...saved } : line)),
+        lines: prev.lines.map((line) => (line.sku === sku ? { ...line, ...patch(line) } : line)),
       };
     });
+  }
+
+  async function handleEvidence(sku: string, file: File, kind: EvidenceKind = "general") {
+    if (locked || qtyLocked) return;
+    try {
+      const evidencias = await uploadEvidence(current.id, sku, file, kind);
+      patchLocalLine(sku, () => ({ evidencias }));
+    } catch (err) {
+      if (err instanceof Error && err.message === MSG_NO_ENCONTRADO) reportError(err);
+      throw err;
+    }
+  }
+
+  async function handleRemoveEvidence(sku: string, path: string) {
+    if (locked || qtyLocked) return;
+    const evidencias = await removeEvidence(current.id, sku, path);
+    // Pre-patch files live in the line's single-file columns.
+    patchLocalLine(sku, (line) => ({
+      evidencias,
+      evidenciaPath: line.evidenciaPath === path ? undefined : line.evidenciaPath,
+      evidenciaEntregarPath: line.evidenciaEntregarPath === path ? undefined : line.evidenciaEntregarPath,
+      evidenciaFacturarPath: line.evidenciaFacturarPath === path ? undefined : line.evidenciaFacturarPath,
+    }));
   }
 
   async function handleSubmit() {
@@ -222,25 +281,21 @@ export default function CountSessionPage() {
     toast.success("Conteo enviado.");
   }
 
-  /** Validates the capture before asking to close it; the close itself is irreversible. */
-  async function requestCloseCapture() {
+  /** Validates the capture and shows "Tu captura"; the store can still go back and correct it. */
+  async function reviewCapture() {
     await flushSaves();
     if (filled < total) {
       toast.error(`Faltan ${total - filled} SKU por capturar.`);
       return;
     }
-    const missingEvidence = current.lines.filter((line) => lineMissingEvidence(current.kind, line));
+    const missingEvidence = current.lines.filter(lineMissingEvidence);
     if (missingEvidence.length > 0) {
-      toast.error(
-        current.kind === "urgente"
-          ? "Falta foto en productos con físico mayor a 0."
-          : "Falta foto del físico o evidencia en productos con pendientes.",
-      );
+      toast.error("Falta foto del físico o evidencia en productos con pendientes o dañado.");
       const idx = current.lines.findIndex((l) => l.sku === missingEvidence[0].sku);
       if (idx >= 0) setSkuIndex(idx);
       return;
     }
-    setConfirmClose(true);
+    setStep("revision");
   }
 
   async function closeCapture() {
@@ -254,9 +309,9 @@ export default function CountSessionPage() {
       }
       setSession(scopeWeeklySession(next));
       setConfirmClose(false);
-      setStep("revision");
+      setStep("revision_diffs");
     } catch (err: unknown) {
-      toast.error(saveErrorMessage(err));
+      reportError(err);
     } finally {
       setClosing(false);
     }
@@ -346,17 +401,25 @@ export default function CountSessionPage() {
           onIndex={setSkuIndex}
           onPatch={handlePatch}
           onEvidence={handleEvidence}
-          onFinish={() => void requestCloseCapture()}
+          onRemoveEvidence={handleRemoveEvidence}
+          onFinish={() => void reviewCapture()}
         />
       ) : null}
 
-      {step === "revision" && !locked ? (
-        <div className="space-y-4 pb-24">
+      {step === "revision" && !locked && !qtyLocked ? (
+        <div className="space-y-4 pb-32 lg:pb-0">
           <DiffReview session={current} mode="captura" readOnly />
+          <p className="mx-auto max-w-lg text-center text-sm text-fg-subtle">
+            Revisa tus cantidades. Si algo está mal, regresa a corregir antes de cerrar la captura.
+          </p>
           <div className="fixed inset-x-0 bottom-0 z-40 bg-canvas/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm lg:static lg:bg-transparent lg:p-0">
             <div className="mx-auto flex max-w-lg flex-col gap-2 sm:flex-row">
-              <button type="button" className="btn-primary flex-1" onClick={() => setStep("revision_diffs")}>
-                Ver diferencias vs SAP
+              <button type="button" className="btn-secondary flex-1" onClick={() => setStep("conteo")}>
+                <ArrowLeft className="h-4 w-4" />
+                Regresar a corregir
+              </button>
+              <button type="button" className="btn-primary flex-1" onClick={() => setConfirmClose(true)}>
+                Cerrar captura
               </button>
             </div>
           </div>
@@ -372,7 +435,7 @@ export default function CountSessionPage() {
           />
           <div className="fixed inset-x-0 bottom-0 z-40 bg-canvas/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm lg:static lg:bg-transparent lg:p-0">
             <div className="mx-auto flex max-w-lg flex-col gap-2 sm:flex-row">
-              <button type="button" className="btn-primary flex-1" onClick={() => void handleSubmit()}>
+              <button type="button" className="btn-primary flex-1" onClick={() => void handleSubmit().catch(reportError)}>
                 Confirmar y enviar
               </button>
             </div>
@@ -433,7 +496,7 @@ export default function CountSessionPage() {
               setConfirmStart(false);
               setPendingIdentity(null);
             })
-            .catch((err: Error) => toast.error(saveErrorMessage(err)))
+            .catch(reportError)
             .finally(() => setStarting(false));
         }}
       />

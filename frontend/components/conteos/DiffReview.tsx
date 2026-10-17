@@ -5,7 +5,7 @@ import { LineEvidence } from "@/components/conteos/EvidencePreview";
 import DiffSortControls from "@/components/conteos/DiffSortControls";
 import type { CountSession } from "@/lib/types";
 import { lineDiff, lineMonto, sessionDiffStats } from "@/lib/types";
-import { lineMatchesQuery, sortLines, type DiffSort } from "@/lib/conteos/diffSort";
+import { sortLines, type DiffSort } from "@/lib/conteos/diffSort";
 import { formatQtyInput } from "@/lib/conteos/qtyMode";
 import { cn, formatMoney } from "@/lib/utils";
 
@@ -27,16 +27,15 @@ export default function DiffReview({
   readOnly?: boolean;
 }) {
   const captured = session.lines.some((line) => line.fisico != null);
-  const [skuQuery, setSkuQuery] = useState("");
   const [sort, setSort] = useState<DiffSort>("monto");
   const stats = sessionDiffStats(session);
   const diffs = useMemo(() => {
     const withDiff = session.lines.filter((line) => {
       const diff = lineDiff(line);
-      return diff != null && diff !== 0 && lineMatchesQuery(line, skuQuery);
+      return diff != null && diff !== 0;
     });
     return sortLines(withDiff, sort).map((line) => ({ line, diff: lineDiff(line), monto: lineMonto(line) }));
-  }, [session.lines, skuQuery, sort]);
+  }, [session.lines, sort]);
 
   if (mode === "captura") {
     return (
@@ -65,7 +64,8 @@ export default function DiffReview({
                     <th className="pb-2 pr-3">Producto</th>
                     <th className="pb-2 pr-3 text-right">Físico</th>
                     <th className="pb-2 pr-3 text-right">Pend. ent.</th>
-                    <th className="pb-2 text-right">Pend. fact.</th>
+                    <th className="pb-2 pr-3 text-right">Pend. fact.</th>
+                    <th className="pb-2 text-right">Dañado</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -82,8 +82,11 @@ export default function DiffReview({
                       <td className="py-2.5 pr-3 text-right font-mono text-sm tabular-nums text-fg">
                         {qtyLabel(line.pendienteEntregar)}
                       </td>
-                      <td className="py-2.5 text-right font-mono text-sm tabular-nums text-fg">
+                      <td className="py-2.5 pr-3 text-right font-mono text-sm tabular-nums text-fg">
                         {qtyLabel(line.pendienteFacturar)}
+                      </td>
+                      <td className="py-2.5 text-right font-mono text-sm tabular-nums text-fg">
+                        {qtyLabel(line.danado)}
                       </td>
                     </tr>
                   ))}
@@ -119,14 +122,12 @@ export default function DiffReview({
           <p className="mt-2 text-sm text-fg-subtle">Explica cada diferencia (positiva o negativa).</p>
         ) : null}
         {captured && stats.skuCount > 0 ? (
-          <DiffSortControls className="mt-3" query={skuQuery} onQuery={setSkuQuery} sort={sort} onSort={setSort} />
+          <DiffSortControls className="mt-3" sort={sort} onSort={setSort} />
         ) : null}
         {!captured ? (
           <p className="mt-2 text-sm text-fg-subtle">Todavía no hay cantidades capturadas.</p>
         ) : stats.skuCount === 0 ? (
           <p className="mt-2 text-sm text-fg-subtle">El físico ajustado coincide con el teórico SAP.</p>
-        ) : diffs.length === 0 ? (
-          <p className="mt-4 text-sm text-fg-subtle">Ningún SKU coincide con el filtro.</p>
         ) : (
           <ul className="mt-4 space-y-4">
             {diffs.map(({ line, diff, monto }) => {

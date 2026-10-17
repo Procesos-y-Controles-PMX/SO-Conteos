@@ -75,6 +75,8 @@ export type CountLine = {
   fisico: number | null;
   pendienteEntregar: number | null;
   pendienteFacturar: number | null;
+  /** Informativo: no entra en la diferencia vs SAP (el físico ya lo incluye). */
+  danado: number | null;
   costo?: number;
   comentario?: string;
   evidencia?: string;
@@ -89,9 +91,50 @@ export type CountLine = {
   evidenciaFacturarPath?: string;
   evidenciaFacturarAt?: string;
   evidenciaFacturarMime?: string;
+  /** Files in cnt_evidencias; the evidencia* fields above are pre-patch single files. */
+  evidencias?: EvidenceFile[];
 };
 
-export type EvidenceKind = "general" | "entregar" | "facturar";
+export type EvidenceKind = "general" | "entregar" | "facturar" | "danado";
+
+export type EvidenceFile = { kind: EvidenceKind; path: string; nombre?: string; mime?: string; at?: string };
+
+/** Quantity that makes a slot's evidence mandatory when it is above 0. */
+export const EVIDENCE_QTY: Record<EvidenceKind, (line: CountLine) => number | null> = {
+  general: (line) => line.fisico,
+  entregar: (line) => line.pendienteEntregar,
+  facturar: (line) => line.pendienteFacturar,
+  danado: (line) => line.danado,
+};
+
+/** Every evidence file of a line (legacy single columns + cnt_evidencias), optionally of one kind. */
+export function evidenceFiles(line: CountLine, kind?: EvidenceKind): EvidenceFile[] {
+  const legacy: Array<EvidenceFile | null> = [
+    line.evidenciaPath
+      ? { kind: "general", path: line.evidenciaPath, nombre: line.evidencia, mime: line.evidenciaMime, at: line.evidenciaAt }
+      : null,
+    line.evidenciaEntregarPath
+      ? {
+          kind: "entregar",
+          path: line.evidenciaEntregarPath,
+          nombre: line.evidenciaEntregar,
+          mime: line.evidenciaEntregarMime,
+          at: line.evidenciaEntregarAt,
+        }
+      : null,
+    line.evidenciaFacturarPath
+      ? {
+          kind: "facturar",
+          path: line.evidenciaFacturarPath,
+          nombre: line.evidenciaFacturar,
+          mime: line.evidenciaFacturarMime,
+          at: line.evidenciaFacturarAt,
+        }
+      : null,
+  ];
+  const all = [...legacy.filter((f): f is EvidenceFile => f != null), ...(line.evidencias ?? [])];
+  return kind ? all.filter((f) => f.kind === kind) : all;
+}
 
 export type CountSession = {
   id: string;
@@ -159,22 +202,15 @@ export function countQtyLocked(session: Pick<CountSession, "status" | "capturaCe
   return session.status === "enviado" || session.status === "no_concluido" || Boolean(session.capturaCerradaAt);
 }
 
-/** Audit photo of the physical count when something was counted. */
-export function fisicoNeedsEvidence(line: CountLine) {
-  return (line.fisico ?? 0) > 0 && !line.evidenciaPath;
+/** First slot (físico, pendientes, dañado) with a quantity above 0 and no file. */
+export function missingEvidenceKind(line: CountLine): EvidenceKind | undefined {
+  return (Object.keys(EVIDENCE_QTY) as EvidenceKind[]).find(
+    (kind) => (EVIDENCE_QTY[kind](line) ?? 0) > 0 && evidenceFiles(line, kind).length === 0,
+  );
 }
 
-/** @deprecated Prefer fisicoNeedsEvidence */
-export function urgentNeedsEvidence(line: CountLine) {
-  return fisicoNeedsEvidence(line);
-}
-
-export function lineMissingEvidence(kind: CountKind, line: CountLine) {
-  if (fisicoNeedsEvidence(line)) return true;
-  if (kind !== "semanal") return false;
-  const needEnt = (line.pendienteEntregar ?? 0) > 0 && !line.evidenciaEntregarPath;
-  const needFac = (line.pendienteFacturar ?? 0) > 0 && !line.evidenciaFacturarPath;
-  return needEnt || needFac;
+export function lineMissingEvidence(line: CountLine) {
+  return missingEvidenceKind(line) !== undefined;
 }
 
 /** True when the store already captured quantities or evidence (not just identity). */
@@ -184,9 +220,8 @@ export function sessionWasStarted(session: Pick<CountSession, "lines">) {
       line.fisico != null ||
       (line.pendienteEntregar ?? 0) > 0 ||
       (line.pendienteFacturar ?? 0) > 0 ||
-      Boolean(line.evidenciaPath) ||
-      Boolean(line.evidenciaEntregarPath) ||
-      Boolean(line.evidenciaFacturarPath),
+      (line.danado ?? 0) > 0 ||
+      evidenceFiles(line).length > 0,
   );
 }
 

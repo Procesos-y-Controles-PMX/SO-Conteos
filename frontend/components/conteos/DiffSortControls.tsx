@@ -10,23 +10,26 @@ export default function DiffSortControls({
   onSort,
   className,
 }: {
-  query: string;
-  onQuery: (value: string) => void;
+  /** Omit to hide the search box. */
+  query?: string;
+  onQuery?: (value: string) => void;
   sort: DiffSort;
   onSort: (value: DiffSort) => void;
   className?: string;
 }) {
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <label className="min-w-40 flex-1">
-        <span className="sr-only">Buscar SKU</span>
-        <input
-          className="input-field"
-          placeholder="Buscar SKU o producto…"
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-        />
-      </label>
+      {onQuery ? (
+        <label className="min-w-40 flex-1">
+          <span className="sr-only">Buscar SKU</span>
+          <input
+            className="input-field"
+            placeholder="Buscar SKU o producto…"
+            value={query ?? ""}
+            onChange={(e) => onQuery(e.target.value)}
+          />
+        </label>
+      ) : null}
       <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Ordenar">
         <span className="field-label mr-1">Ordenar</span>
         {(Object.keys(DIFF_SORT_LABEL) as DiffSort[]).map((key) => (

@@ -20,13 +20,15 @@ export async function PATCH(request: Request, { params }: Params) {
     const touchesQty =
       body.patch.fisico !== undefined ||
       body.patch.pendienteEntregar !== undefined ||
-      body.patch.pendienteFacturar !== undefined;
+      body.patch.pendienteFacturar !== undefined ||
+      body.patch.danado !== undefined;
     if (touchesQty && guard.row.captura_cerrada_at) return fail(MSG_CAPTURA_CERRADA, 409);
 
     const dbPatch: Record<string, unknown> = {};
     if (body.patch.fisico !== undefined) dbPatch.fisico = body.patch.fisico;
     if (body.patch.pendienteEntregar !== undefined) dbPatch.pendiente_entregar = body.patch.pendienteEntregar;
     if (body.patch.pendienteFacturar !== undefined) dbPatch.pendiente_facturar = body.patch.pendienteFacturar;
+    if (body.patch.danado !== undefined) dbPatch.danado = body.patch.danado;
     if (body.patch.comentario !== undefined) dbPatch.comentario = body.patch.comentario;
     if (Object.keys(dbPatch).length === 0) return ok({ saved: true });
     const { error } = await resolved.supabase

@@ -1,7 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { COMENTARIO_NO_CONCLUIDO, type CountKind, type CountLine, type CountSession, type Producto } from "@/lib/types";
 import { isConteoLinea, type InventarioRow } from "@/lib/excel/parseInventario";
-import { mapInventarioMeta, mapLine, mapProducto, mapSession, type CntConteoRow, type CntLineaRow } from "@/lib/db/map";
+import {
+  mapEvidencia,
+  mapInventarioMeta,
+  mapLine,
+  mapProducto,
+  mapSession,
+  type CntConteoRow,
+  type CntEvidenciaRow,
+  type CntLineaRow,
+} from "@/lib/db/map";
 import { fetchSucursalById, fetchSucursales } from "@/lib/db/stores";
 import { evidenceRetentionDays, purgeExpiredEvidence, removeConteoEvidence } from "@/lib/evidence";
 import { weekKeyFromDate, weekLabel } from "@/lib/week";
@@ -164,14 +173,30 @@ async function syncWeeklyLines(supabase: SupabaseClient, conteoId: string, sucur
   return extra.length || missing.length || teoricoChanged ? await linesFor(supabase, conteoId) : lines;
 }
 
+/** Evidence files of one count (optionally one SKU); empty until db/patch-danado-y-evidencias.sql runs. */
+export async function fetchEvidencias(supabase: SupabaseClient, conteoId: string, sku?: string) {
+  let q = supabase.from("cnt_evidencias").select("sku, kind, path, nombre, mime, created_at").eq("id_conteo", conteoId);
+  if (sku) q = q.eq("sku", sku);
+  const { data, error } = await q.order("created_at");
+  if (error) {
+    if (/cnt_evidencias/.test(error.message)) return [];
+    throw error;
+  }
+  return (data ?? []) as CntEvidenciaRow[];
+}
+
 async function linesFor(supabase: SupabaseClient, conteoId: string): Promise<CountLine[]> {
-  const { data, error } = await supabase
-    .from("cnt_conteo_lineas")
-    .select("*")
-    .eq("id_conteo", conteoId)
-    .order("sku");
+  const [{ data, error }, evidencias] = await Promise.all([
+    supabase.from("cnt_conteo_lineas").select("*").eq("id_conteo", conteoId).order("sku"),
+    fetchEvidencias(supabase, conteoId),
+  ]);
   if (error) throw error;
-  return ((data ?? []) as CntLineaRow[]).map(mapLine);
+  const bySku = new Map<string, CntEvidenciaRow[]>();
+  for (const row of evidencias) bySku.set(row.sku, [...(bySku.get(row.sku) ?? []), row]);
+  return ((data ?? []) as CntLineaRow[]).map((row) => ({
+    ...mapLine(row),
+    evidencias: (bySku.get(row.sku) ?? []).map(mapEvidencia),
+  }));
 }
 
 export async function fetchSession(

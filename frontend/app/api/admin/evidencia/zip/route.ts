@@ -60,26 +60,41 @@ export async function POST(request: Request) {
       .or("evidencia_path.not.is.null,evidencia_entregar_path.not.is.null,evidencia_facturar_path.not.is.null");
     if (lineError) throw lineError;
 
-    const entries: Array<{ path: string; name: string }> = [];
+    const { data: extra, error: extraError } = await resolved.supabase
+      .from("cnt_evidencias")
+      .select("id_conteo, sku, kind, path")
+      .in("id_conteo", ids)
+      .order("created_at");
+    if (extraError && !/cnt_evidencias/.test(extraError.message)) throw extraError;
+
+    const files: Array<{ id_conteo: string; sku: string; suffix: string; path: string }> = [];
     for (const linea of (lineas ?? []) as LineaEvidencia[]) {
-      const conteo = byId.get(linea.id_conteo);
+      for (const slot of SLOTS) {
+        const path = linea[slot.col];
+        if (path) files.push({ id_conteo: linea.id_conteo, sku: linea.sku, suffix: slot.suffix, path });
+      }
+    }
+    for (const row of (extra ?? []) as Array<{ id_conteo: string; sku: string; kind: string; path: string }>) {
+      files.push({ ...row, suffix: row.kind === "general" ? "foto" : row.kind });
+    }
+
+    // Repeated names (several photos per slot) get -2, -3… when zipped in the browser.
+    const entries: Array<{ path: string; name: string }> = [];
+    for (const file of files) {
+      const conteo = byId.get(file.id_conteo);
       if (!conteo) continue;
       const tienda = folderName(sucursalName.get(conteo.id_sucursal) ?? conteo.id_sucursal);
       const conteoFolder = folderName(
         conteo.kind === "semanal" ? `Semanal ${weekLabel(conteo.week_key)}` : conteo.titulo,
       );
-      for (const slot of SLOTS) {
-        const path = linea[slot.col];
-        if (!path) continue;
-        entries.push({
-          path,
-          name: `${tienda}/${conteoFolder}/${safeEvidenceSku(linea.sku)}_${slot.suffix}.${extOf(path)}`,
-        });
-      }
+      entries.push({
+        path: file.path,
+        name: `${tienda}/${conteoFolder}/${safeEvidenceSku(file.sku)}_${file.suffix}.${extOf(file.path)}`,
+      });
     }
     if (!entries.length) return ok({ files: [] });
 
-    const files: Array<{ name: string; url: string }> = [];
+    const signedFiles: Array<{ name: string; url: string }> = [];
     for (let i = 0; i < entries.length; i += 100) {
       const chunk = entries.slice(i, i + 100);
       const { data: signed, error } = await resolved.supabase.storage
@@ -90,10 +105,10 @@ export async function POST(request: Request) {
         );
       if (error) throw error;
       (signed ?? []).forEach((item, j) => {
-        if (item.signedUrl) files.push({ name: chunk[j].name, url: item.signedUrl });
+        if (item.signedUrl) signedFiles.push({ name: chunk[j].name, url: item.signedUrl });
       });
     }
-    return ok({ files });
+    return ok({ files: signedFiles });
   } catch (err) {
     console.error(err);
     return fail("No se pudo preparar el ZIP de evidencias.", 500);

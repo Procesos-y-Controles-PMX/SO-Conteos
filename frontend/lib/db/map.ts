@@ -48,6 +48,7 @@ export type CntLineaRow = {
   fisico: number | string | null;
   pendiente_entregar: number | string | null;
   pendiente_facturar: number | string | null;
+  danado?: number | string | null;
   costo?: number | string | null;
   comentario?: string | null;
   evidencia_nombre: string | null;
@@ -68,6 +69,25 @@ function num(value: number | string | null | undefined): number | null {
   if (value == null || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+export type CntEvidenciaRow = {
+  sku: string;
+  kind: import("@/lib/types").EvidenceKind;
+  path: string;
+  nombre: string | null;
+  mime: string | null;
+  created_at: string;
+};
+
+export function mapEvidencia(row: CntEvidenciaRow): import("@/lib/types").EvidenceFile {
+  return {
+    kind: row.kind,
+    path: row.path,
+    nombre: row.nombre ?? undefined,
+    mime: row.mime ?? undefined,
+    at: row.created_at,
+  };
 }
 
 export function mapSucursal(
@@ -124,6 +144,7 @@ export function mapLine(row: CntLineaRow): import("@/lib/types").CountLine {
     fisico: num(row.fisico),
     pendienteEntregar: num(row.pendiente_entregar) ?? 0,
     pendienteFacturar: num(row.pendiente_facturar) ?? 0,
+    danado: num(row.danado) ?? 0,
     costo: num(row.costo) ?? 0,
     comentario: row.comentario?.trim() || undefined,
     evidencia: row.evidencia_nombre ?? undefined,

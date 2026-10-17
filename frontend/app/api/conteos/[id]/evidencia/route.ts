@@ -10,8 +10,11 @@ import {
   mimeFromFileName,
   removeEvidenceFiles,
 } from "@/lib/evidence";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { conteoParaEditar, conteoVisible } from "@/lib/api/conteoGuard";
 import { requireSession } from "@/lib/api/session";
+import { mapEvidencia } from "@/lib/db/map";
+import { fetchEvidencias } from "@/lib/db/queries";
 import type { EvidenceKind } from "@/lib/types";
 
 type Params = { params: Promise<{ id: string }> };
@@ -24,67 +27,19 @@ function pathForConteo(conteoId: string, path: string) {
 }
 
 function normalizeKind(raw: unknown): EvidenceKind {
-  if (raw === "entregar" || raw === "facturar" || raw === "general") return raw;
+  if (raw === "entregar" || raw === "facturar" || raw === "danado" || raw === "general") return raw;
   return "general";
 }
 
-function pathColumn(kind: EvidenceKind) {
-  if (kind === "entregar") return "evidencia_entregar_path";
-  if (kind === "facturar") return "evidencia_facturar_path";
-  return "evidencia_path";
-}
+/** Pre-patch single-file columns, one set per slot. */
+const LEGACY_SLOTS = [
+  ["evidencia_path", "evidencia_nombre", "evidencia_at", "evidencia_mime"],
+  ["evidencia_entregar_path", "evidencia_entregar_nombre", "evidencia_entregar_at", "evidencia_entregar_mime"],
+  ["evidencia_facturar_path", "evidencia_facturar_nombre", "evidencia_facturar_at", "evidencia_facturar_mime"],
+] as const;
 
-function metaColumns(kind: EvidenceKind, path: string, fileName: string, mime: string | null) {
-  const at = new Date().toISOString();
-  const nombre = fileName.trim() || path.split("/").pop() || "evidencia";
-  if (kind === "entregar") {
-    return {
-      evidencia_entregar_path: path,
-      evidencia_entregar_nombre: nombre,
-      evidencia_entregar_at: at,
-      evidencia_entregar_mime: mime,
-    };
-  }
-  if (kind === "facturar") {
-    return {
-      evidencia_facturar_path: path,
-      evidencia_facturar_nombre: nombre,
-      evidencia_facturar_at: at,
-      evidencia_facturar_mime: mime,
-    };
-  }
-  return {
-    evidencia_path: path,
-    evidencia_nombre: nombre,
-    evidencia_at: at,
-    evidencia_mime: mime,
-  };
-}
-
-function clientPayload(kind: EvidenceKind, path: string, fileName: string, mime: string | null, at: string) {
-  const nombre = fileName.trim() || "evidencia";
-  if (kind === "entregar") {
-    return {
-      evidenciaEntregar: nombre,
-      evidenciaEntregarPath: path,
-      evidenciaEntregarAt: at,
-      evidenciaEntregarMime: mime,
-    };
-  }
-  if (kind === "facturar") {
-    return {
-      evidenciaFacturar: nombre,
-      evidenciaFacturarPath: path,
-      evidenciaFacturarAt: at,
-      evidenciaFacturarMime: mime,
-    };
-  }
-  return {
-    evidencia: nombre,
-    evidenciaPath: path,
-    evidenciaAt: at,
-    evidenciaMime: mime,
-  };
+async function evidenciasFor(supabase: SupabaseClient, id: string, sku: string) {
+  return (await fetchEvidencias(supabase, id, sku)).map(mapEvidencia);
 }
 
 export async function GET(request: Request, { params }: Params) {
@@ -93,23 +48,11 @@ export async function GET(request: Request, { params }: Params) {
   const resolved = dbOrError();
   if ("response" in resolved) return resolved.response;
   const { id } = await params;
-  const url = new URL(request.url);
-  const sku = url.searchParams.get("sku")?.trim() || "";
-  const kind = normalizeKind(url.searchParams.get("kind"));
-  if (!sku) return fail("SKU requerido.");
+  const path = new URL(request.url).searchParams.get("path")?.trim() || "";
+  if (!path || !pathForConteo(id, path)) return fail("Ruta inválida.");
   try {
     const visible = await conteoVisible(resolved.supabase, id, auth.user);
     if ("response" in visible) return visible.response;
-    const col = pathColumn(kind);
-    const { data, error } = await resolved.supabase
-      .from("cnt_conteo_lineas")
-      .select(col)
-      .eq("id_conteo", id)
-      .eq("sku", sku)
-      .maybeSingle();
-    if (error) throw error;
-    const path = (data as Record<string, string | null> | null)?.[col];
-    if (!path) return fail("Sin evidencia.", 404);
     const { data: signed, error: signError } = await resolved.supabase.storage
       .from(EVIDENCE_BUCKET)
       .createSignedUrl(path, 60 * 60);
@@ -194,50 +137,83 @@ export async function PUT(request: Request, { params }: Params) {
     if (!sku || !path) return fail("SKU y archivo requeridos.");
     if (!pathForConteo(id, path)) return fail("Ruta inválida.");
 
-    const col = pathColumn(kind);
-    const { data: existing, error: lineError } = await resolved.supabase
+    const { data: line, error: lineError } = await resolved.supabase
       .from("cnt_conteo_lineas")
-      .select("sku, evidencia_path, evidencia_entregar_path, evidencia_facturar_path")
+      .select("sku")
       .eq("id_conteo", id)
       .eq("sku", sku)
       .maybeSingle();
-    if (lineError) {
-      console.error("evidencia put select", lineError);
-      if (/evidencia_/i.test(lineError.message)) {
-        return fail("Falta la columna de evidencia en la base. Corre db/patch-evidencia.sql.", 500);
-      }
-      throw lineError;
-    }
-    if (!existing) return fail("Esa línea no existe.", 404);
+    if (lineError) throw lineError;
+    if (!line) return fail("Esa línea no existe.", 404);
 
-    const at = new Date().toISOString();
     const fileName = body.fileName?.trim() || path.split("/").pop() || "evidencia";
-    const mime = body.contentType?.trim() || mimeFromFileName(fileName) || null;
-    const { error } = await resolved.supabase
-      .from("cnt_conteo_lineas")
-      .update(metaColumns(kind, path, fileName, mime))
-      .eq("id_conteo", id)
-      .eq("sku", sku);
+    const { error } = await resolved.supabase.from("cnt_evidencias").upsert(
+      {
+        id_conteo: id,
+        sku,
+        kind,
+        path,
+        nombre: fileName,
+        mime: body.contentType?.trim() || mimeFromFileName(fileName) || null,
+      },
+      { onConflict: "path", ignoreDuplicates: true },
+    );
     if (error) {
-      console.error("evidencia put update", error);
-      if (/evidencia_/i.test(error.message)) {
-        return fail("Falta la columna de evidencia en la base. Corre db/patch-evidencia.sql.", 500);
+      console.error("evidencia put insert", error);
+      if (/cnt_evidencias/.test(error.message)) {
+        return fail("Falta la tabla de evidencias en la base. Corre db/patch-danado-y-evidencias.sql.", 500);
       }
       throw error;
     }
 
     await resolved.supabase.from("cnt_conteos").update({ status: "en_progreso" }).eq("id", id).eq("status", "pendiente");
-
-    const previous = (existing as Record<string, string | null>)[col];
-    if (previous && previous !== path) await removeEvidenceFiles(resolved.supabase, [previous]);
-
-    return ok({
-      saved: true,
-      kind,
-      ...clientPayload(kind, path, fileName, mime, at),
-    });
+    return ok({ saved: true, evidencias: await evidenciasFor(resolved.supabase, id, sku) });
   } catch (err) {
     console.error(err);
     return fail("No se pudo guardar la evidencia.", 500);
+  }
+}
+
+/** Removes one file: a cnt_evidencias row, or a pre-patch single-file slot. */
+export async function DELETE(request: Request, { params }: Params) {
+  const auth = await requireSession();
+  if ("response" in auth) return auth.response;
+  const resolved = dbOrError();
+  if ("response" in resolved) return resolved.response;
+  const { id } = await params;
+  try {
+    const guard = await conteoParaEditar(resolved.supabase, id, auth.user, { capturaAbierta: true });
+    if ("response" in guard) return guard.response;
+
+    const body = (await request.json()) as { sku?: string; path?: string };
+    const sku = body.sku?.trim() || "";
+    const path = body.path?.trim() || "";
+    if (!sku || !path || !pathForConteo(id, path)) return fail("SKU y archivo requeridos.");
+
+    const { data: removed, error } = await resolved.supabase
+      .from("cnt_evidencias")
+      .delete()
+      .eq("id_conteo", id)
+      .eq("sku", sku)
+      .eq("path", path)
+      .select("path");
+    if (error && !/cnt_evidencias/.test(error.message)) throw error;
+    if (!removed?.length) {
+      for (const [pathCol, ...rest] of LEGACY_SLOTS) {
+        const cleared = Object.fromEntries([pathCol, ...rest].map((col) => [col, null]));
+        const { error: legacyError } = await resolved.supabase
+          .from("cnt_conteo_lineas")
+          .update(cleared)
+          .eq("id_conteo", id)
+          .eq("sku", sku)
+          .eq(pathCol, path);
+        if (legacyError) throw legacyError;
+      }
+    }
+    await removeEvidenceFiles(resolved.supabase, [path]);
+    return ok({ removed: true, evidencias: await evidenciasFor(resolved.supabase, id, sku) });
+  } catch (err) {
+    console.error(err);
+    return fail("No se pudo quitar la evidencia.", 500);
   }
 }

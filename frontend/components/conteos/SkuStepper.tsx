@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Camera, ChevronLeft, ChevronRight, Upload } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import QuantityField from "@/components/conteos/QuantityField";
 import EvidencePreview from "@/components/conteos/EvidencePreview";
@@ -17,11 +17,25 @@ import {
   writePreferredQtyMode,
   type QtyMode,
 } from "@/lib/conteos/qtyMode";
-import type { CountLine, CountSession, EvidenceKind } from "@/lib/types";
+import {
+  EVIDENCE_QTY,
+  evidenceFiles,
+  missingEvidenceKind,
+  type CountLine,
+  type CountSession,
+  type EvidenceKind,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { weekLabel } from "@/lib/week";
 
-const WEEKLY_HINT = "Obligatoria porque el pendiente es mayor a 0.";
+const PENDIENTE_HINT = "Obligatoria si la cantidad es mayor a 0. Puedes adjuntar varias.";
+
+const MISSING_EVIDENCE: Record<EvidenceKind, string> = {
+  general: "Adjunta la foto del inventario físico.",
+  entregar: "Adjunta evidencia de pendiente por entregar.",
+  facturar: "Adjunta evidencia de pendiente por facturar.",
+  danado: "Adjunta foto del material dañado.",
+};
 
 /** Explicit extensions: some desktop pickers hide HEIC under image/*. */
 const EVIDENCE_ACCEPT = "image/*,video/*,.heic,.heif,.jpg,.jpeg,.png,.webp,.mp4,.mov";
@@ -48,6 +62,7 @@ export default function SkuStepper({
   onIndex,
   onPatch,
   onEvidence,
+  onRemoveEvidence,
   onFinish,
 }: {
   session: CountSession;
@@ -55,6 +70,7 @@ export default function SkuStepper({
   onIndex: (next: number) => void;
   onPatch: (sku: string, patch: Partial<CountLine>) => void;
   onEvidence?: (sku: string, file: File, kind?: EvidenceKind) => Promise<void>;
+  onRemoveEvidence?: (sku: string, path: string) => Promise<void>;
   onFinish: () => void;
 }) {
   const line = session.lines[index];
@@ -96,9 +112,6 @@ export default function SkuStepper({
     );
   }
 
-  const hasPendEntregar = (line.pendienteEntregar ?? 0) > 0;
-  const hasPendFacturar = (line.pendienteFacturar ?? 0) > 0;
-  const showWeeklyEvidence = session.kind === "semanal";
   const last = index >= total - 1;
   const counted = session.lines.filter((l) => l.fisico != null).length;
   const bagKg = bagKgFromName(line.nombre);
@@ -116,21 +129,44 @@ export default function SkuStepper({
     };
   }
 
-  const fisico = line.fisico ?? 0;
-  const needsFisicoPhoto = fisico > 0;
+  /** Slot is shown when its quantity is above 0 or it already has files. */
+  function showsSlot(kind: EvidenceKind) {
+    return (EVIDENCE_QTY[kind](line) ?? 0) > 0 || evidenceFiles(line, kind).length > 0;
+  }
+
+  /** One file at a time so each save sees the previous one. */
+  async function uploadAll(kind: EvidenceKind, files: File[]) {
+    if (!files.length || !onEvidence) return;
+    setUploading(true);
+    let saved = 0;
+    try {
+      for (const file of files) {
+        await onEvidence(line.sku, file, kind);
+        saved += 1;
+      }
+      toast.success(saved > 1 ? `${saved} evidencias guardadas.` : "Evidencia guardada.");
+    } catch (err) {
+      toast.error((err as Error).message || "No se pudo subir.");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   function upload(kind: EvidenceKind, file: File | undefined) {
-    if (!file || !onEvidence) return;
+    if (file) void uploadAll(kind, [file]);
+  }
+
+  function remove(path: string) {
+    if (!onRemoveEvidence) return;
     setUploading(true);
-    void onEvidence(line.sku, file, kind)
-      .then(() => toast.success("Evidencia guardada."))
-      .catch((err: Error) => toast.error(err.message || "No se pudo subir."))
+    void onRemoveEvidence(line.sku, path)
+      .catch((err: Error) => toast.error(err.message || "No se pudo quitar."))
       .finally(() => setUploading(false));
   }
 
   useEffect(() => {
     function onPaste(e: ClipboardEvent) {
-      if (uploading || !onEvidence) return;
+      if (e.defaultPrevented || uploading || !onEvidence) return;
       const items = e.clipboardData?.items;
       if (!items) return;
       let file: File | null = null;
@@ -145,20 +181,10 @@ export default function SkuStepper({
         break;
       }
       if (!file) return;
-      if (needsFisicoPhoto || line.evidenciaPath) {
-        e.preventDefault();
-        upload("general", file);
-        return;
-      }
-      if (showWeeklyEvidence && (hasPendEntregar || line.evidenciaEntregarPath)) {
-        e.preventDefault();
-        upload("entregar", file);
-        return;
-      }
-      if (showWeeklyEvidence && (hasPendFacturar || line.evidenciaFacturarPath)) {
-        e.preventDefault();
-        upload("facturar", file);
-      }
+      const kind = (Object.keys(EVIDENCE_QTY) as EvidenceKind[]).find(showsSlot);
+      if (!kind) return;
+      e.preventDefault();
+      upload(kind, file);
     }
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
@@ -168,16 +194,9 @@ export default function SkuStepper({
     if (line.fisico == null) {
       onPatch(line.sku, { fisico: 0 });
     }
-    if (needsFisicoPhoto && !line.evidenciaPath) {
-      toast.error("Adjunta la foto del inventario físico.");
-      return;
-    }
-    if (showWeeklyEvidence && hasPendEntregar && !line.evidenciaEntregarPath) {
-      toast.error("Adjunta evidencia de pendiente por entregar.");
-      return;
-    }
-    if (showWeeklyEvidence && hasPendFacturar && !line.evidenciaFacturarPath) {
-      toast.error("Adjunta evidencia de pendiente por facturar.");
+    const missingKind = missingEvidenceKind(line);
+    if (missingKind) {
+      toast.error(MISSING_EVIDENCE[missingKind]);
       return;
     }
     if (last) onFinish();
@@ -201,19 +220,14 @@ export default function SkuStepper({
     kind,
     label,
     hint,
-    attachedName,
-    attachedPath,
-    attachedMime,
     className = "mt-3",
   }: {
     kind: EvidenceKind;
     label: string;
     hint: string;
-    attachedName?: string;
-    attachedPath?: string;
-    attachedMime?: string;
     className?: string;
   }) {
+    const files = evidenceFiles(line, kind);
     const buttonClass =
       "neu-button min-h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-sm px-3 py-2.5 text-xs font-semibold text-fg";
     return (
@@ -225,6 +239,7 @@ export default function SkuStepper({
           const file = fileFromClipboard(e.clipboardData);
           if (!file) return;
           e.preventDefault();
+          e.stopPropagation();
           upload(kind, file);
         }}
       >
@@ -252,31 +267,47 @@ export default function SkuStepper({
           </label>
           <label className={cn(buttonClass, "flex", uploading && "pointer-events-none opacity-60")}>
             <Upload className="h-4 w-4 shrink-0" />
-            {attachedPath ? "Cambiar archivo" : "Elegir archivo"}
+            {files.length ? "Agregar archivos" : "Elegir archivos"}
             <input
               type="file"
               accept={EVIDENCE_ACCEPT}
+              multiple
               className="hidden"
               disabled={uploading || !onEvidence}
               onChange={(e) => {
-                const file = e.target.files?.[0];
+                const picked = Array.from(e.target.files ?? []);
                 e.target.value = "";
-                upload(kind, file);
+                void uploadAll(kind, picked);
               }}
             />
           </label>
         </div>
         {uploading ? <p className="mt-2 text-[11px] text-fg-subtle">Subiendo evidencia…</p> : null}
-        {attachedPath ? (
-          <div className="mt-2">
-            <EvidencePreview
-              sessionId={session.id}
-              sku={line.sku}
-              kind={kind}
-              mime={attachedMime}
-              name={attachedName}
-            />
-          </div>
+        {files.length ? (
+          <ul className="mt-2 flex flex-wrap gap-1.5">
+            {files.map((file, i) => (
+              <li key={file.path} className="flex min-w-0 max-w-full items-center gap-1">
+                <EvidencePreview
+                  sessionId={session.id}
+                  path={file.path}
+                  mime={file.mime}
+                  name={file.nombre}
+                  label={files.length > 1 ? `${i + 1}. ${file.nombre ?? "Evidencia"}` : undefined}
+                />
+                {onRemoveEvidence ? (
+                  <button
+                    type="button"
+                    className="neu-button rounded-sm p-1 text-fg-muted"
+                    aria-label={`Quitar ${file.nombre ?? "evidencia"}`}
+                    disabled={uploading}
+                    onClick={() => remove(file.path)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
         ) : null}
       </div>
     );
@@ -361,14 +392,11 @@ export default function SkuStepper({
             onCommit={goNext}
             {...bindQty(line.fisico, (fisico) => onPatch(line.sku, { fisico }))}
           />
-          {needsFisicoPhoto || line.evidenciaPath ? (
+          {showsSlot("general") ? (
             <EvidenceSlot
               kind="general"
               label="Foto del físico"
               hint="Obligatoria si el físico es mayor a 0. Sirve para auditar la cantidad."
-              attachedName={line.evidencia}
-              attachedPath={line.evidenciaPath}
-              attachedMime={line.evidenciaMime}
               className="mt-4"
             />
           ) : null}
@@ -381,15 +409,8 @@ export default function SkuStepper({
               label="Pendiente entregar"
               {...bindQty(line.pendienteEntregar, (pendienteEntregar) => onPatch(line.sku, { pendienteEntregar }))}
             />
-            {showWeeklyEvidence && (hasPendEntregar || line.evidenciaEntregarPath) ? (
-              <EvidenceSlot
-                kind="entregar"
-                label="Evidencia entregar"
-                hint={WEEKLY_HINT}
-                attachedName={line.evidenciaEntregar}
-                attachedPath={line.evidenciaEntregarPath}
-                attachedMime={line.evidenciaEntregarMime}
-              />
+            {showsSlot("entregar") ? (
+              <EvidenceSlot kind="entregar" label="Evidencia entregar" hint={PENDIENTE_HINT} />
             ) : null}
           </div>
           <div>
@@ -398,15 +419,18 @@ export default function SkuStepper({
               label="Pendiente facturar"
               {...bindQty(line.pendienteFacturar, (pendienteFacturar) => onPatch(line.sku, { pendienteFacturar }))}
             />
-            {showWeeklyEvidence && (hasPendFacturar || line.evidenciaFacturarPath) ? (
-              <EvidenceSlot
-                kind="facturar"
-                label="Evidencia facturar"
-                hint={WEEKLY_HINT}
-                attachedName={line.evidenciaFacturar}
-                attachedPath={line.evidenciaFacturarPath}
-                attachedMime={line.evidenciaFacturarMime}
-              />
+            {showsSlot("facturar") ? (
+              <EvidenceSlot kind="facturar" label="Evidencia facturar" hint={PENDIENTE_HINT} />
+            ) : null}
+          </div>
+          <div className="col-span-2">
+            <QuantityField
+              key={`${line.sku}-${mode}-dn`}
+              label="Material dañado"
+              {...bindQty(line.danado, (danado) => onPatch(line.sku, { danado }))}
+            />
+            {showsSlot("danado") ? (
+              <EvidenceSlot kind="danado" label="Foto del material dañado" hint={PENDIENTE_HINT} />
             ) : null}
           </div>
         </div>

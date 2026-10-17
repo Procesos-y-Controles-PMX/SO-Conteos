@@ -5,7 +5,7 @@ import DiffReview from "@/components/conteos/DiffReview";
 import EvidenceZipButton from "@/components/conteos/EvidenceZipButton";
 import SemaforoDot from "@/components/conteos/SemaforoDot";
 import PageHeader from "@/components/ui/PageHeader";
-import { countProgress, sessionDiffStats, sessionSemaforo, type CountSession } from "@/lib/types";
+import { countProgress, evidenceFiles, sessionDiffStats, sessionSemaforo, type CountSession } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { weekLabel } from "@/lib/week";
 
@@ -26,9 +26,7 @@ export default function AdminCountReview({
   const router = useRouter();
   const { filled, total } = countProgress(session);
   const diffs = sessionDiffStats(session);
-  const hasEvidence = session.lines.some(
-    (line) => line.evidenciaPath || line.evidenciaEntregarPath || line.evidenciaFacturarPath,
-  );
+  const hasEvidence = session.lines.some((line) => evidenceFiles(line).length > 0);
   const who = session.counterName
     ? `${session.counterName}${session.counterPuesto ? ` · ${session.counterPuesto}` : ""}`
     : "La sucursal aún no indica quién cuenta";

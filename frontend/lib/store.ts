@@ -2,7 +2,19 @@ import { goToLogin } from "@/lib/auth";
 import { decodeSpreadsheetBuffer, parseDelimitedText } from "@/lib/excel/parseInventario";
 import { EVIDENCE_MAX_BYTES, isAllowedEvidenceMime, mimeFromFileName } from "@/lib/evidence";
 import type { SoAccount, SoAccountsSourceStatus } from "@/lib/so-account-types";
-import type { CountKind, CountLine, CountSession, CtzUsuario, InventarioMeta, Producto, SemaforoResumen, Sucursal, ZonaSemaforo } from "@/lib/types";
+import type {
+  CountKind,
+  CountLine,
+  CountSession,
+  CtzUsuario,
+  EvidenceFile,
+  EvidenceKind,
+  InventarioMeta,
+  Producto,
+  SemaforoResumen,
+  Sucursal,
+  ZonaSemaforo,
+} from "@/lib/types";
 
 export type InventarioPayload = {
   meta: InventarioMeta;
@@ -220,12 +232,8 @@ export async function patchLine(sessionId: string, sku: string, patch: Partial<C
   );
 }
 
-export async function uploadEvidence(
-  sessionId: string,
-  sku: string,
-  file: File,
-  kind: import("@/lib/types").EvidenceKind = "general",
-) {
+/** Uploads one file and returns every evidence file of that line after the save. */
+export async function uploadEvidence(sessionId: string, sku: string, file: File, kind: EvidenceKind = "general") {
   if (!isAllowedEvidenceMime(file.type, file.name)) {
     throw new Error(`"${file.name}" no es foto ni video. Usa JPG, PNG, HEIC, MP4 o MOV.`);
   }
@@ -262,7 +270,7 @@ export async function uploadEvidence(
   if (!put.ok) {
     throw new Error(`No se pudo subir el archivo (error ${put.status}). Intenta de nuevo.`);
   }
-  const saved = await parse<Partial<CountLine> & { saved?: boolean }>(
+  const saved = await parse<{ evidencias: EvidenceFile[] }>(
     await fetch(`/api/conteos/${sessionId}/evidencia`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -275,36 +283,23 @@ export async function uploadEvidence(
       }),
     }),
   );
-  if (kind === "entregar") {
-    return {
-      evidenciaEntregar: saved.evidenciaEntregar ?? file.name,
-      evidenciaEntregarPath: saved.evidenciaEntregarPath ?? signed.path,
-      evidenciaEntregarAt: saved.evidenciaEntregarAt,
-      evidenciaEntregarMime: saved.evidenciaEntregarMime ?? contentType,
-    };
-  }
-  if (kind === "facturar") {
-    return {
-      evidenciaFacturar: saved.evidenciaFacturar ?? file.name,
-      evidenciaFacturarPath: saved.evidenciaFacturarPath ?? signed.path,
-      evidenciaFacturarAt: saved.evidenciaFacturarAt,
-      evidenciaFacturarMime: saved.evidenciaFacturarMime ?? contentType,
-    };
-  }
-  return {
-    evidencia: saved.evidencia ?? file.name,
-    evidenciaPath: saved.evidenciaPath ?? signed.path,
-    evidenciaAt: saved.evidenciaAt,
-    evidenciaMime: saved.evidenciaMime ?? contentType,
-  };
+  return saved.evidencias;
 }
 
-export function evidenceViewUrl(
-  sessionId: string,
-  sku: string,
-  kind: import("@/lib/types").EvidenceKind = "general",
-) {
-  return `/api/conteos/${sessionId}/evidencia?sku=${encodeURIComponent(sku)}&kind=${kind}`;
+/** Removes one file and returns the line's remaining cnt_evidencias files. */
+export async function removeEvidence(sessionId: string, sku: string, path: string) {
+  const data = await parse<{ evidencias: EvidenceFile[] }>(
+    await fetch(`/api/conteos/${sessionId}/evidencia`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sku, path }),
+    }),
+  );
+  return data.evidencias;
+}
+
+export function evidenceViewUrl(sessionId: string, path: string) {
+  return `/api/conteos/${sessionId}/evidencia?path=${encodeURIComponent(path)}`;
 }
 
 export async function submitSession(

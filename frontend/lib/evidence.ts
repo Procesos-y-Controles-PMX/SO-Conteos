@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { EvidenceKind } from "@/lib/types";
 
 export const EVIDENCE_BUCKET = "cnt-evidencia";
 export const DEFAULT_EVIDENCE_RETENTION_DAYS = 14;
@@ -51,7 +52,7 @@ export function evidenceObjectPath(
   conteoId: string,
   sku: string,
   fileName: string,
-  kind: "general" | "entregar" | "facturar" = "general",
+  kind: EvidenceKind = "general",
 ) {
   const ext = (fileName.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8) || "bin";
   const slot = kind === "general" ? "ev" : kind;
@@ -136,21 +137,34 @@ export async function purgeExpiredEvidence(supabase: SupabaseClient, conteoId?: 
     supabase,
     rows.map((row) => ({ id_conteo: row.id_conteo, sku: row.sku })),
   );
-  return { days, cutoff, scanned: rows.length, purged: paths.length };
+
+  // Same retention for físico photos stored in cnt_evidencias.
+  let extraQ = supabase.from("cnt_evidencias").select("id, path").eq("kind", "general").lt("created_at", cutoff);
+  if (conteoId) extraQ = extraQ.eq("id_conteo", conteoId);
+  const { data: extra, error: extraError } = await extraQ;
+  if (extraError && !/cnt_evidencias/.test(extraError.message)) throw extraError;
+  const extraRows = (extra ?? []) as Array<{ id: string; path: string }>;
+  if (extraRows.length) {
+    await removeEvidenceFiles(supabase, extraRows.map((row) => row.path));
+    await supabase.from("cnt_evidencias").delete().in("id", extraRows.map((row) => row.id));
+  }
+  return { days, cutoff, scanned: rows.length + extraRows.length, purged: paths.length + extraRows.length };
 }
 
 export async function removeConteoEvidence(supabase: SupabaseClient, conteoId: string) {
-  const { data, error } = await supabase
-    .from("cnt_conteo_lineas")
-    .select("evidencia_path")
-    .eq("id_conteo", conteoId)
-    .not("evidencia_path", "is", null);
-  if (error) {
-    if (/evidencia_path/.test(error.message)) return;
-    throw error;
-  }
-  const paths = ((data ?? []) as Array<{ evidencia_path: string | null }>)
-    .map((row) => row.evidencia_path)
-    .filter((p): p is string => Boolean(p));
+  const [{ data, error }, { data: extra, error: extraError }] = await Promise.all([
+    supabase
+      .from("cnt_conteo_lineas")
+      .select("evidencia_path, evidencia_entregar_path, evidencia_facturar_path")
+      .eq("id_conteo", conteoId),
+    supabase.from("cnt_evidencias").select("path").eq("id_conteo", conteoId),
+  ]);
+  if (error && !/evidencia_/.test(error.message)) throw error;
+  if (extraError && !/cnt_evidencias/.test(extraError.message)) throw extraError;
+  const legacy = (data ?? []) as Array<Record<string, string | null>>;
+  const paths = [
+    ...legacy.flatMap((row) => [row.evidencia_path, row.evidencia_entregar_path, row.evidencia_facturar_path]),
+    ...((extra ?? []) as Array<{ path: string }>).map((row) => row.path),
+  ].filter((p): p is string => Boolean(p));
   await removeEvidenceFiles(supabase, paths);
 }
