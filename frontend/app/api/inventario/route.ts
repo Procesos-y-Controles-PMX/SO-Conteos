@@ -23,8 +23,9 @@ async function fileToRows(file: File): Promise<unknown[][]> {
     return parseCsvText(buffer.toString("utf8").replace(/^\uFEFF/, ""));
   }
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
-    const readXlsxFile = (await import("read-excel-file/node")).default;
-    return (await readXlsxFile(buffer)) as unknown as unknown[][];
+    // read-excel-file 9 devuelve todas las hojas ([{ sheet, data }]); readSheet da las filas de la primera.
+    const { readSheet } = await import("read-excel-file/node");
+    return (await readSheet(buffer)) as unknown as unknown[][];
   }
   return parseDelimitedText(buffer.toString("utf8").replace(/^\uFEFF/, ""));
 }

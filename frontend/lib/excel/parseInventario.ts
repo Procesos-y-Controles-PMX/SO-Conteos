@@ -29,9 +29,14 @@ const COSTO_HEADERS = [
   "costo prom unitario",
   "costo",
   "precio",
-  "valor",
-  "value unrestricted",
   "precio base",
+];
+/** SAP total value of unrestricted stock. Unit cost = this ÷ quantity. */
+const VALOR_TOTAL_HEADERS = [
+  "valor libre util.",
+  "valor libre util",
+  "valor libre utilizacion",
+  "value unrestricted",
 ];
 const STORE_HEADERS = ["nombre 1", "sucursal", "tienda", "plant", "centro nombre"];
 const LINEA_HEADERS = ["linea", "línea", "line", "tag"];
@@ -112,6 +117,8 @@ export function resolveInventarioRows(rows: unknown[][], sucursales: NamedStore[
   const nombreCol = findCol(header, NOMBRE_HEADERS, skip);
   const umCol = findCol(header, UM_HEADERS, skip);
   const teoricoCol = findCol(header, TEORICO_HEADERS, skip);
+  const valorTotalCol = findCol(header, VALOR_TOTAL_HEADERS, skip);
+  if (valorTotalCol >= 0) skip.add(valorTotalCol);
   const costoCol = findCol(header, COSTO_HEADERS, skip);
 
   if (skuCol < 0) {
@@ -134,7 +141,8 @@ export function resolveInventarioRows(rows: unknown[][], sucursales: NamedStore[
     const um = umCol >= 0 ? cell(row[umCol]) : "";
     const teoricoRaw = teoricoCol >= 0 ? cell(row[teoricoCol]) : "";
     const costoRaw = costoCol >= 0 ? cell(row[costoCol]) : "";
-    if (!sku && !storeRaw && !nombre && !um && !teoricoRaw && !costoRaw) continue;
+    const valorRaw = valorTotalCol >= 0 ? cell(row[valorTotalCol]) : "";
+    if (!sku && !storeRaw && !nombre && !um && !teoricoRaw && !costoRaw && !valorRaw) continue;
     if (!sku) {
       skipped += 1;
       continue;
@@ -153,14 +161,22 @@ export function resolveInventarioRows(rows: unknown[][], sucursales: NamedStore[
       nombre,
       um: um || "PZA",
       teorico: teoricoCol >= 0 ? parseNumber(teoricoRaw) : 0,
-      costo: costoCol >= 0 ? parseNumber(costoRaw) : 0,
+      costo:
+        costoCol >= 0
+          ? parseNumber(costoRaw)
+          : teoricoCol >= 0 && parseNumber(teoricoRaw)
+            ? parseNumber(valorRaw) / parseNumber(teoricoRaw)
+            : 0,
       sucursalId,
       sucursalNombre,
       linea,
     };
     const prev = byKey.get(key);
     if (prev) {
-      prev.teorico += next.teorico;
+      const qty = prev.teorico + next.teorico;
+      const amount = prev.teorico * prev.costo + next.teorico * next.costo;
+      prev.teorico = qty;
+      prev.costo = qty ? amount / qty : prev.costo || next.costo;
       if (!prev.nombre) prev.nombre = next.nombre;
       skipped += 1;
       continue;

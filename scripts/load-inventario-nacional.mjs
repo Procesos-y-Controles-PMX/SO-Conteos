@@ -181,9 +181,13 @@ const nombreCol = col("texto breve de material");
 const umCol = col("umb");
 const teoricoCol = col("libre utilizacion");
 const costoCol = col("costo unit", "costo unitario", "costo prom unitario");
+const valorCol = col("valor libre util.", "valor libre util", "valor libre utilizacion");
 if (storeCol < 0 || skuCol < 0) {
   console.error("Unexpected headers", header);
   process.exit(1);
+}
+if (costoCol < 0 && valorCol < 0) {
+  console.log("No unit-cost or Valor libre util. column; costo will be 0.");
 }
 
 const suc = await rest("GET", "/rest/v1/ctz_sucursales?select=id,nombre,activo&activo=eq.true&order=nombre");
@@ -211,18 +215,25 @@ for (const row of rows.slice(1)) {
     continue;
   }
   const key = `${sucursalId}::${sku.toUpperCase()}`;
+  const teorico = teoricoCol >= 0 ? parseNumber(row[teoricoCol] ?? "") : 0;
+  const valor = valorCol >= 0 ? parseNumber(row[valorCol] ?? "") : 0;
+  const costo =
+    costoCol >= 0 ? parseNumber(row[costoCol] ?? "") : teorico ? valor / teorico : 0;
   const next = {
     id_sucursal: sucursalId,
     sku,
     nombre: (nombreCol >= 0 ? row[nombreCol] : "") || sku,
     um: (umCol >= 0 ? row[umCol] : "") || "PZA",
-    teorico: teoricoCol >= 0 ? parseNumber(row[teoricoCol] ?? "") : 0,
-    costo: costoCol >= 0 ? parseNumber(row[costoCol] ?? "") : 0,
+    teorico,
+    costo,
     linea: linea || null,
   };
   const prev = byKey.get(key);
   if (prev) {
-    prev.teorico += next.teorico;
+    const qty = prev.teorico + next.teorico;
+    const amount = prev.teorico * prev.costo + next.teorico * next.costo;
+    prev.teorico = qty;
+    prev.costo = qty ? amount / qty : prev.costo || next.costo;
     skipped += 1;
     continue;
   }
@@ -230,8 +241,16 @@ for (const row of rows.slice(1)) {
 }
 
 const productos = [...byKey.values()];
-console.log(`Parsed ${productos.length} store-SKU rows, skipped ${skipped}, unmatched ${unmatched.size}`);
+const withCosto = productos.filter((p) => p.costo > 0).length;
+console.log(
+  `Parsed ${productos.length} store-SKU rows, skipped ${skipped}, unmatched ${unmatched.size}, with unit cost ${withCosto}`,
+);
 if (unmatched.size) console.log("Unmatched:", [...unmatched].sort().join(" | "));
+
+if (process.argv.includes("--dry-run")) {
+  console.log("Dry run; nothing written.");
+  process.exit(0);
+}
 
 await ensureSchema();
 
